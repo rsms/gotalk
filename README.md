@@ -15,6 +15,13 @@ Gotalk in a nutshell:
 - **Practical** — Gotalk includes a JavaScript implementation for Web Sockets alongside the full-featured Go implementation, making it easy to build real-time web applications. The Gotalk source code also includes a number of easily-readable examples.
 
 
+## Using
+
+Gotalk is currently implemented in Go and JavaScript. Build the go package like any other go package. See js/README.md for details on the JavaScript library.
+
+There are a few examples in the `examples` directory demonstrating Gotalk.
+
+
 ## By example
 
 Here's an example written in [Go](http://golang.org/) which demonstrates a "greet" operation:
@@ -199,24 +206,6 @@ button.addEventListener('click', function () {
 
 The request will fail with an error "socket is closed" if the user clicks our button while the connection isn't open.
 
-Adding automatic reconnection with back-off would give us even more comfort:
-
-```js
-var s, connectDelay;
-function connect() {
-  s = gotalk.connect('ws://'+document.location.host+'/gotalk', function (err, s) {
-    if (err) {
-      connectDelay = connectDelay ? connectDelay * 2 : 100;
-      setTimeout(connect, connectDelay);
-    } else {
-      connectDelay = 0;
-      s.on('close', connect);
-    }
-  });
-}
-connect();
-// use s ...
-```
 
 ## Protocol and wire format
 

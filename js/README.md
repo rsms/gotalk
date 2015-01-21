@@ -1,6 +1,8 @@
 # Gotalk in JavaScript
 
-Example of connecting to a web server, providing a "prompt" operation (which the server can invoke at ay time to ask the user some question) and finally invoking a "echo" operation on the server.
+The JavaScript implementation of Gotalk currently only supports connecting over web sockets from modern web browsers. A future version might provide "listening" abilities and support for other environments like Nodejs.
+
+Here's an example of connecting to a web server, providing a "prompt" operation (which the server can invoke at ay time to ask the user some question) and finally invoking a "echo" operation on the server.
 
 ```js
 gotalk.handle('prompt', function (params, result) {
