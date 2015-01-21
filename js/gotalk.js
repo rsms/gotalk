@@ -622,7 +622,7 @@ msgHandlers[protocol.MsgTypeSingleReq] = function (msg, payload) {
     result.error('no such operation');
   } else {
     try {
-      handler(payload, result);
+      handler(payload, result, msg.name);
     } catch (err) {
       if (typeof console !== 'undefined') { console.error(err.stack || err); }
       result.error('internal error');
@@ -653,7 +653,7 @@ msgHandlers[protocol.MsgTypeErrorRes] = handleRes;
 msgHandlers[protocol.MsgTypeNotification] = function (msg, payload) {
   var s = this, handler = s.handlers.findNotificationHandler(msg.name);
   if (handler) {
-    handler(payload);
+    handler(payload, msg.name);
   }
 };
 
@@ -727,43 +727,55 @@ Sock.prototype.notify = function(op, value) {
 // ===============================================================================================
 
 function Handlers() { return Object.create(Handlers.prototype, {
-  reqHandlers:  {value:{}},
-  noteHandlers: {value:{}}
+  reqHandlers:         {value:{}},
+  reqFallbackHandler:  {value:null, writable:true},
+  noteHandlers:        {value:{}},
+  noteFallbackHandler: {value:null, writable:true}
 }); }
 exports.Handlers = Handlers;
 
 
 Handlers.prototype.handleBufferRequest = function(op, handler) {
-  this.reqHandlers[op] = handler;
+  if (!op) {
+    this.reqFallbackHandler = handler;
+  } else {
+    this.reqHandlers[op] = handler;
+  }
 };
 
 Handlers.prototype.handleRequest = function(op, handler) {
-  return this.handleBufferRequest(op, function (buf, result) {
+  return this.handleBufferRequest(op, function (buf, result, op) {
     var resultWrapper = function(value) {
       return result(JSON.stringify(value));
     };
     resultWrapper.error = result.error;
     var value = decodeJSON(buf);
-    handler(value, resultWrapper);
+    handler(value, resultWrapper, op);
   });
 };
 
 Handlers.prototype.handleBufferNotification = function(name, handler) {
-  this.noteHandlers[name] = handler;
+  if (!name) {
+    this.noteFallbackHandler = handler;
+  } else {
+    this.noteHandlers[name] = handler;
+  }
 };
 
 Handlers.prototype.handleNotification = function(name, handler) {
-  this.handleBufferNotification(name, function (buf) {
-    handler(decodeJSON(buf));
+  this.handleBufferNotification(name, function (buf, name) {
+    handler(decodeJSON(buf), name);
   });
 };
 
 Handlers.prototype.findRequestHandler = function(op) {
-  return this.reqHandlers[op];
+  var handler = this.reqHandlers[op];
+  return handler || this.reqFallbackHandler;
 };
 
 Handlers.prototype.findNotificationHandler = function(name) {
-  return this.noteHandlers[name];
+  var handler = this.noteHandlers[name];
+  return handler || this.noteFallbackHandler;
 };
 
 // ===============================================================================================
