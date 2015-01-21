@@ -139,30 +139,34 @@ func main() {
 
 In our html document, we begin by registering any operations we can handle:
 
-    <!-- index.html -->
-    <body>
-    <script type="text/javascript" src="gotalk.js"></script>
-    <script>
-    gotalk.handle('greet', function (params, result) {
-      result({ greeting: 'Hello ' + params.name });
-    });
-    </script>
+```html
+<!-- index.html -->
+<body>
+<script type="text/javascript" src="gotalk.js"></script>
+<script>
+gotalk.handle('greet', function (params, result) {
+  result({ greeting: 'Hello ' + params.name });
+});
+</script>
+```
 
 We can't "listen & accept" connections in a web browser, but we can "connect" so we do just that, connecting to "/gotalk" which is where we registered `gotalk.WebSocketHandler` in our server.
 
-    <!-- index.html -->
-    <body>
-    <script type="text/javascript" src="gotalk.js"></script>
-    <script>
-    gotalk.handle('greet', function (params, result) {
-      result({ greeting: 'Hello ' + params.name });
-    });
+```html
+<!-- index.html -->
+<body>
+<script type="text/javascript" src="gotalk.js"></script>
+<script>
+gotalk.handle('greet', function (params, result) {
+  result({ greeting: 'Hello ' + params.name });
+});
 
-    gotalk.connect('ws://'+document.location.host+'/gotalk', function (err, s) {
-      if (err) return console.error(err);
-      // s is a gotalk.Sock
-    });
-    </script>
+gotalk.connect('ws://'+document.location.host+'/gotalk', function (err, s) {
+  if (err) return console.error(err);
+  // s is a gotalk.Sock
+});
+</script>
+```
 
 This is enough for enabling the *server* to do things in the *browser* ...
 
