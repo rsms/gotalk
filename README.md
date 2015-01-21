@@ -224,39 +224,37 @@ The wire format is designed to be human-readable and flexible; it's byte-based a
 
 Here's a complete description of the protocol:
 
-```rb
-conversation    = ProtocolVersion Message*
-message         = SingleRequest | StreamRequest
-                | SingleResult | StreamResult
-                | ErrorResult
+    conversation    = ProtocolVersion Message*
+    message         = SingleRequest | StreamRequest
+                    | SingleResult | StreamResult
+                    | ErrorResult
 
-ProtocolVersion = <hexdigit> <hexdigit>
+    ProtocolVersion = <hexdigit> <hexdigit>
 
-SingleRequest   = "r" requestID operation payload
-StreamRequest   = "s" requestID operation payload StreamReqPart+
-StreamReqPart   = "p" requestID payload
-SingleResult    = "R" requestID payload
-StreamResult    = "S" requestID payload StreamResult*
-ErrorResult     = "E" requestID payload
-Notification    = "n" type payload
+    SingleRequest   = "r" requestID operation payload
+    StreamRequest   = "s" requestID operation payload StreamReqPart+
+    StreamReqPart   = "p" requestID payload
+    SingleResult    = "R" requestID payload
+    StreamResult    = "S" requestID payload StreamResult*
+    ErrorResult     = "E" requestID payload
+    Notification    = "n" type payload
 
-requestID       = <byte> <byte> <byte>
+    requestID       = <byte> <byte> <byte>
 
-operation       = text3
-type            = text3
+    operation       = text3
+    type            = text3
 
-text3           = text3Size text3Value
-text3Size       = hexUInt3
-text3Value      = <<byte>{text3Size} as utf8 text>
+    text3           = text3Size text3Value
+    text3Size       = hexUInt3
+    text3Value      = <<byte>{text3Size} as utf8 text>
 
-payload         = payloadSize payloadData?
-payloadSize     = hexUInt8
-payloadData     = <byte>{payloadSize}
+    payload         = payloadSize payloadData?
+    payloadSize     = hexUInt8
+    payloadData     = <byte>{payloadSize}
 
-hexUInt3        = <hexdigit> <hexdigit> <hexdigit>
-hexUInt8        = <hexdigit> <hexdigit> <hexdigit> <hexdigit>
-                  <hexdigit> <hexdigit> <hexdigit> <hexdigit>
-```
+    hexUInt3        = <hexdigit> <hexdigit> <hexdigit>
+    hexUInt8        = <hexdigit> <hexdigit> <hexdigit> <hexdigit>
+                      <hexdigit> <hexdigit> <hexdigit> <hexdigit>
 
 A conversation begins with the protocol version:
 
