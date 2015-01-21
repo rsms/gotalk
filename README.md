@@ -15,7 +15,7 @@ Gotalk in a nutshell:
 - **Practical** — Gotalk includes a JavaScript implementation for Web Sockets alongside the full-featured Go implementation, making it easy to build real-time web applications. The Gotalk source code also includes a number of easily-readable examples.
 
 
-## Using
+## Usage
 
 Gotalk is currently implemented in Go and JavaScript. Build the go package like any other go package. See js/README.md for details on the JavaScript library.
 
