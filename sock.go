@@ -564,7 +564,6 @@ func (s *socket) readStreamReqPart(id string, size int) error {
   if rch := s.getReqChan(id); rch != nil {
     rch <- b
   } else if s.streamReqLimit == 0 {
-    s.Close()
     return errors.New("illegal message")  // There was no "start stream" message
   } // else: ignore msg
 
