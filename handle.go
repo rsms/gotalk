@@ -53,7 +53,7 @@ type Handlers interface {
   FindNotificationHandler(name string) BufferNoteHandler
 }
 
-func NewHandlers() *handlers {
+func NewHandlers() Handlers {
   return &handlers{reqHandlers:make(reqHandlerMap), noteHandlers:make(noteHandlerMap)}
 }
 
