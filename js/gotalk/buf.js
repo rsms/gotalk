@@ -4,7 +4,6 @@ var Buf;
 if (typeof Uint8Array !== 'undefined') {
 
 var utf8 = require('./utf8');
-utf8.Buf = Buf;
 
 Uint8Array.prototype.toString = function (encoding, start, end) {
   // assumes buffer contains UTF8-encoded text
@@ -40,7 +39,7 @@ Buf.isBuf = function (v) {
 };
 
 Buf.fromString = function (s, encoding) {
-  return utf8.encode(s);
+  return utf8.encode(s, Buf);
 };
 
 }

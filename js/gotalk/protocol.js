@@ -14,9 +14,6 @@ var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     'r'.charCodeAt(0),
     MsgTypeErrorRes      = exports.MsgTypeErrorRes =      'E'.charCodeAt(0),
     MsgTypeNotification  = exports.MsgTypeNotification =  'n'.charCodeAt(0);
 
-// Use our buf type with the utf8 package
-utf8.Buf = Buf;
-
 // ==============================================================================================
 // Binary (byte) protocol
 

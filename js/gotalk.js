@@ -103,7 +103,6 @@ var Buf;
 if (typeof Uint8Array !== 'undefined') {
 
 var utf8 = require('./utf8');
-utf8.Buf = Buf;
 
 Uint8Array.prototype.toString = function (encoding, start, end) {
   // assumes buffer contains UTF8-encoded text
@@ -139,7 +138,7 @@ Buf.isBuf = function (v) {
 };
 
 Buf.fromString = function (s, encoding) {
-  return utf8.encode(s);
+  return utf8.encode(s, Buf);
 };
 
 }
@@ -164,9 +163,6 @@ var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     'r'.charCodeAt(0),
     MsgTypeStreamRes     = exports.MsgTypeStreamRes =     'S'.charCodeAt(0),
     MsgTypeErrorRes      = exports.MsgTypeErrorRes =      'E'.charCodeAt(0),
     MsgTypeNotification  = exports.MsgTypeNotification =  'n'.charCodeAt(0);
-
-// Use our buf type with the utf8 package
-utf8.Buf = Buf;
 
 // ==============================================================================================
 // Binary (byte) protocol
@@ -333,22 +329,10 @@ exports.text = {
 (function(module) { var exports = module.exports;
 "use strict";
 //
-// Buf = interface(size int) {
-//   get[int] -> uint8
-//   set[int](uint8)
-//   length int
-//   slice(start int, end int) -> Buf
-// }
-//
 // decode(Buf, [start], [end]) -> String
-// encode(String) -> Buf
+// encode(String, BufFactory) -> Buf
 // sizeOf(String) -> int
 //
-
-// Buf implementation
-if (typeof Buffer !== 'undefined') {
-  exports.Buf = function (v) { return new Buffer(v); }
-}
 
 // Returns the number of bytes needed to represent string `s` as UTF8
 function sizeOf(s) {
@@ -376,8 +360,8 @@ if (typeof TextDecoder !== 'undefined') {
     return decoder.decode(b);
   };
 
-  exports.encode = function encode(s) {
-    return exports.Buf(encoder.encode(s));
+  exports.encode = function encode(s, Buf) {
+    return Buf(encoder.encode(s));
   };
 
 } else {
@@ -407,8 +391,8 @@ if (typeof TextDecoder !== 'undefined') {
     return s;
   };
 
-  exports.encode = function encode(s) {
-    var i = 0, e = s.length, c, j = 0, b = exports.Buf(sizeOf(s));
+  exports.encode = function encode(s, Buf) {
+    var i = 0, e = s.length, c, j = 0, b = Buf(sizeOf(s));
     for (; i !== e;) {
       c = s.charCodeAt(i++);
       // TODO FIXME: charCodeAt returns UTF16-like codepoints, not UTF32 codepoints, meaning that
