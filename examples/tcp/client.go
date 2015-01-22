@@ -22,7 +22,7 @@ func main() {
   if err != nil {
     log.Fatalln(err)
   }
-  println("connected to", s.Addr().String())
+  println("connected to", s.Addr())
 
   // Send a request & read result via JSON-encoded go values
   greeting := GreetOut{}
@@ -38,24 +38,6 @@ func main() {
     fmt.Printf("echo: %v\n", err.Error())
   } else {
     fmt.Printf("echo: %v\n", string(outbuf))
-  }
-
-  // Send a request & read result in a streaming manner
-  req := s.StreamRequest("joke")
-  if err != nil { log.Fatalln(err) }
-  if err := req.Write([]byte("tell me")); err != nil { log.Fatalln(err) }
-  if err := req.Write([]byte(" a joke")); err != nil { log.Fatalln(err) }
-  if err := req.Write([]byte(" or two")); err != nil { log.Fatalln(err) }
-  if err := req.End(); err != nil { log.Fatalln(err) }
-  // s000004joke00000007tell me
-  // p00000000007 a joke
-  // p00000000007 or two
-  // p00000000000
-  for {
-    outbuf, err := req.Read()
-    if err != nil { log.Fatalln(err) }
-    if outbuf == nil { break }  // end of stream
-    fmt.Printf("joke: \"%s\"\n", string(outbuf))
   }
 
   // Send a notification as JSON

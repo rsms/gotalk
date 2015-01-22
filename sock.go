@@ -52,6 +52,14 @@ type Sock interface {
   SetUserData(interface{})
   GetUserData() interface{}
 
+  // Enable streaming requests and set the limit for how many streaming requests this socket
+  // can handle at the same time. Setting this to `0` disables streaming requests alltogether
+  // (the default) while setting this to a large number might be cause for security concerns
+  // as a malicious peer could send many "start stream" messages, but never sending
+  // any "end stream" messages, slowly exhausting memory.
+  // When accepting connections, connected sockets inherit this value.
+  SetStreamReqLimit(int)
+
   // Address of this socket
   Addr() string
 
@@ -123,21 +131,22 @@ type pendingResMap  map[string]chan interface{}
 type pendingReqMap  map[string]chan []byte
 
 type socket struct {
-  handlers     Handlers
-  wmu          sync.Mutex          // guards writes on conn
-  listener     net.Listener        // non-nil after successful call to Listen
-  conn         io.ReadWriteCloser  // non-nil after successful call to Connect or accept
-  closeFunc    func(Sock)
-  userData     interface{}
+  handlers       Handlers
+  wmu            sync.Mutex          // guards writes on conn
+  listener       net.Listener        // non-nil after successful call to Listen
+  conn           io.ReadWriteCloser  // non-nil after successful call to Connect or accept
+  closeFunc      func(Sock)
+  userData       interface{}
 
   // Used for performing requests:
-  nextOpID     uint
-  pendingRes   pendingResMap
-  pendingResMu sync.RWMutex
+  nextOpID       uint
+  pendingRes     pendingResMap
+  pendingResMu   sync.RWMutex
 
-  // Used for demultiplexing streaming request payloads:
-  pendingReq   pendingReqMap
-  pendingReqMu sync.RWMutex
+  // Used for streaming requests:
+  streamReqLimit int
+  pendingReq     pendingReqMap
+  pendingReqMu   sync.RWMutex
 }
 
 
@@ -270,11 +279,9 @@ func (s *socket) allocReqChan(id string) chan []byte {
 
 
 func (s *socket) deallocReqChan(id string) {
-  if s.pendingReq != nil {
-    s.pendingReqMu.Lock()
-    defer s.pendingReqMu.Unlock()
-    delete(s.pendingReq, id)
-  }
+  s.pendingReqMu.Lock()
+  defer s.pendingReqMu.Unlock()
+  delete(s.pendingReq, id)
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -405,7 +412,10 @@ func (r *streamRequest) Read() ([]byte, error) {
 
   // Interpret resbuf
   if resbuf, ok := resval.(resbuffer); ok {
-    if resbuf.t == MsgTypeSingleRes {
+    if resbuf.t == MsgTypeErrorRes {
+      r.ended = true
+      return nil, errors.New(string(resbuf.b))
+    } else if resbuf.t == MsgTypeSingleRes {
       r.ended = true
     }
     return resbuf.b, nil
@@ -501,6 +511,14 @@ func (s *socket) readSingleReq(id, op string, size int) error {
 
 
 func (s *socket) readStreamReq(id, op string, size int) error {
+  if len(s.pendingReq) >= s.streamReqLimit {
+    if s.streamReqLimit == 0 {
+      return s.respondErr(size, id, "stream request not supported")
+    } else {
+      return s.respondErr(size, id, "stream request limit")
+    }
+  }
+
   handlerval := s.findHandlerOrResErr(id, op, size)
   if handlerval == nil {
     return nil
@@ -564,6 +582,9 @@ func (s *socket) readStreamReqPart(id string, size int) error {
 
   if rch := s.getReqChan(id); rch != nil {
     rch <- b
+  } else if s.streamReqLimit == 0 {
+    s.Close()
+    return errors.New("illegal message")  // There was no "start stream" message
   } // else: ignore msg
 
   return nil
@@ -707,14 +728,15 @@ func (s *socket) Read() error {
 }
 
 
-func accept(h Handlers, c net.Conn, sockHandler SockHandler) {
-  s := NewSock(h)
-  s.Adopt(c)
-  if err := s.Handshake(); err == nil {
+func (s *socket) accept(c net.Conn, sockHandler SockHandler) {
+  s2 := NewSock(s.handlers)
+  s2.SetStreamReqLimit(s.streamReqLimit)
+  s2.Adopt(c)
+  if err := s2.Handshake(); err == nil {
     if sockHandler != nil {
-      sockHandler(s)
+      sockHandler(s2)
     }
-    s.Read()
+    s2.Read()
   }
 }
 
@@ -725,7 +747,7 @@ func (s *socket) Accept(sockHandler SockHandler) error {
     if err != nil {
       return err
     }
-    go accept(s.handlers, c, sockHandler)
+    go s.accept(c, sockHandler)
   }
   s.listener.Close()
   return nil
@@ -745,6 +767,10 @@ func (s *socket) GetUserData() interface{} {
   return s.userData
 }
 
+
+func (s *socket) SetStreamReqLimit(limit int) {
+  s.streamReqLimit = limit
+}
 
 
 func (s *socket) Addr() string {

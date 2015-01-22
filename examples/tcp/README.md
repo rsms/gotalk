@@ -1,4 +1,4 @@
-This example operates over raw TCP connections and demonstrates all different kinds of gotalk messages, including streaming requests and results.
+This example operates over raw TCP connections.
 
 The two programs `server.go` and `client.go` are supposed to be used together:
 
