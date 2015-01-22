@@ -152,6 +152,7 @@ function viewRoom(roomName) {
     updateUnseenMessageCount(roomName);
   }
 
+  roomMessagesUL.innerText = '';
   fetchMessagesInRoom(roomName);
 }
 
@@ -159,7 +160,7 @@ function viewRoom(roomName) {
 function fetchMessagesInRoom(roomName) {
   s.request('list-messages', roomName, function (err, messages) {
     if (err) return console.error(err.stack);
-    showMessages(/*replaceExisting=*/true, messages);
+    showMessages(/*replaceExisting=*/false, messages);
   });
 }
 
