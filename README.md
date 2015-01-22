@@ -1,18 +1,26 @@
 # gotalk
 
-Gotalk exists to make it easy for programs to *talk with one another over the internet*, like a web app coordinating with a web server, or a bunch of programs dividing work amongst eachother.
+[Gotalk](https://github.com/rsms/gotalk) exists to make it easy for programs to *talk with one another over the internet*, like a web app coordinating with a web server, or a bunch of programs dividing work amongst eachother.
 
-Gotalk in a nutshell:
+![A terribly boring amateur comic strip](https://github.com/rsms/gotalk/raw/master/doc/gotalk-comic.png)
 
-- **Bidirectional** — There's no discrimination on capabilities depending on who connected or who accepted. Both "servers" and "clients" can expose operations as well as send requests to the other side.
+Gotalk takes the natural approach of *bidirectional* and *concurrent* communication — any peer have the ability to expose "operations" as well as asking other peers to perform operations. The traditional restrictions of who can request and who can respond usually associated with a client-server model is nowhere to be found in gotalk.
 
-- **Concurrent** — Requests, results, and notifications all share a single connection without blocking eachother by means of pipelineing. There's no serialization on request-result or even for a single large message, as the gotalk protocol is frame-based and multiplexes messages over a single connection. This means you can perform several requests at once without having to think about queueing or blocking.
+## Gotalk in a nutshell
 
-- **Simple** — Gotalk has a simple and opinionated API with very few components. You expose an operation via "handle" and send requests via "request".
+**Bidirectional** — There's no discrimination on capabilities depending on who connected or who accepted. Both "servers" and "clients" can expose operations as well as send requests to the other side.
 
-- **Debuggable** — The Gotalk protocol's wire format is ASCII-based for easy on-the-wire inspection of data. For example, here's a protocol message representing an operation request: `r001005hello00000005world`. The Gotalk protocol can thus be operated over any reliable byte transport.
+**Concurrent** — Requests, results, and notifications all share a single connection without blocking eachother by means of pipelineing. There's no serialization on request-result or even for a single large message, as the gotalk protocol is frame-based and multiplexes messages over a single connection. This means you can perform several requests at once without having to think about queueing or blocking.
 
-- **Practical** — Gotalk includes a JavaScript implementation for Web Sockets alongside the full-featured Go implementation, making it easy to build real-time web applications. The Gotalk source code also includes a number of easily-readable examples.
+Essentially a Gotalk connection is *pipelined*:
+
+![Diagram of how Gotalk uses connection pipelining](https://github.com/rsms/gotalk/raw/master/doc/gotalk-pipeline-diagram.png)
+
+**Simple** — Gotalk has a simple and opinionated API with very few components. You expose an operation via "handle" and send requests via "request".
+
+**Debuggable** — The Gotalk protocol's wire format is ASCII-based for easy on-the-wire inspection of data. For example, here's a protocol message representing an operation request: `r001005hello00000005world`. The Gotalk protocol can thus be operated over any reliable byte transport.
+
+**Practical** — Gotalk includes a JavaScript implementation for Web Sockets alongside the full-featured Go implementation, making it easy to build real-time web applications. The Gotalk source code also includes a number of easily-readable examples.
 
 
 ## Usage
