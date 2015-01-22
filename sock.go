@@ -186,9 +186,9 @@ func (s *socket) AdoptListener(listener net.Listener) {
 // ===========================================================================================
 
 const (
-  ReqHandlerTypeBuf = ReqHandlerType(iota)
+  reqHandlerTypeBuf = reqHandlerType(iota)
 )
-type ReqHandlerType int
+type reqHandlerType int
 
 // ----------------------------------------------------------------------------------------------
 
@@ -289,7 +289,7 @@ func (s *socket) BufferRequest(op string, buf []byte) ([]byte, error) {
   }
 
   // Wait for response to be read in readLoop
-  ch <- ReqHandlerTypeBuf
+  ch <- reqHandlerTypeBuf
   // Note: Don't call any code in between here that can panic, as that could cause readLoop to
   // deadlock.
   resval := <-ch  // response buffer
@@ -388,7 +388,7 @@ func (r *streamRequest) Read() ([]byte, error) {
   }
 
   // Wait for result chunk to be read in readLoop
-  r.ch <- ReqHandlerTypeBuf
+  r.ch <- reqHandlerTypeBuf
   resval := <- r.ch
 
   // Interpret resbuf
@@ -589,9 +589,9 @@ func (s *socket) readRes(t MsgType, id string, size int) error {
 
   handlerTv := <-ch
 
-  if handlerType, ok := handlerTv.(ReqHandlerType); ok {
+  if handlerType, ok := handlerTv.(reqHandlerType); ok {
     switch (handlerType) {
-    case ReqHandlerTypeBuf:
+    case reqHandlerTypeBuf:
       // Request handler expects buffer
       var buf []byte
       if size != 0 {
