@@ -1,3 +1,7 @@
+if (typeof console === 'undefined') {
+  console = {error:function(){},log:function(){}};
+}
+
 var s; // our socket
 var currentRoom; // name of the room we are currently viewing
 var roomsUL = document.querySelector('#rooms ul.rooms');
