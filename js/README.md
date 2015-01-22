@@ -46,8 +46,9 @@ handleBufferNotification(name String, Handlers.NotBufferHandler)
 
 ## Sock
 
+A connection over which gotalk can be spoken.
+
 ```go
-// Sock represents a connection over which gotalk can be spoken.
 type Sock prototypeof EventEmitter {
   handlers ➝ Handlers    // default: defaultHandlers
   protocol ⇄ ProtocolImp // default: protocol.binary
