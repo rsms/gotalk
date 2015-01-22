@@ -23,16 +23,9 @@ Essentially a Gotalk connection is *pipelined*:
 **Practical** — Gotalk includes a JavaScript implementation for Web Sockets alongside the full-featured Go implementation, making it easy to build real-time web applications. The Gotalk source code also includes a number of easily-readable examples.
 
 
-## Usage
-
-Gotalk is currently implemented in Go and JavaScript. Build the go package like any other go package. See js/README.md for details on the JavaScript library.
-
-There are a few examples in the `examples` directory demonstrating Gotalk.
-
-
 ## By example
 
-Here's an example written in [Go](http://golang.org/) which demonstrates a "greet" operation:
+There are a few examples in the `examples` directory demonstrating Gotalk. But let's explore a simple program right now — here's a little something written in [Go](http://golang.org/) which demonstrates the use of an operation named "greet":
 
 ```go
 func server() {
