@@ -12,7 +12,7 @@ Gotalk takes the natural approach of *bidirectional* and *concurrent* communicat
 
 **Concurrent** — Requests, results, and notifications all share a single connection without blocking eachother by means of pipelineing. There's no serialization on request-result or even for a single large message, as the gotalk protocol is frame-based and multiplexes messages over a single connection. This means you can perform several requests at once without having to think about queueing or blocking.
 
-Essentially a Gotalk connection is *pipelined*:
+Essentially a Gotalk connection is [*pipelined*](http://en.wikipedia.org/wiki/Protocol_pipelining):
 
 ![Diagram of how Gotalk uses connection pipelining](https://github.com/rsms/gotalk/raw/master/doc/gotalk-pipeline-diagram.png)
 
