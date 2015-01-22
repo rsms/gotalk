@@ -13,9 +13,6 @@ import (
 )
 
 type Sock interface {
-  // Connect to a server. Must call Handshake and Read after a successful connection.
-  Connect(how, addr string) error
-
   // Adopt an I/O stream, which should already be in a "connected" state. After calling this,
   // you need to call Handshake and Read to perform the protocol handshake and read messages.
   Adopt(io.ReadWriteCloser)
@@ -27,9 +24,6 @@ type Sock interface {
   // After completing a succesful handshake, call this function to read messages received to this
   // socket. Does not return until the socket is closed.
   Read() error
-
-  // Listen for connections.
-  Listen(how, addr string) error
 
   // Adopt a listener, which should already be in a "listening" state.
   AdoptListener(net.Listener)
@@ -98,10 +92,12 @@ func Pipe() (Sock, Sock, error) {
 // Connect to a server via `how` at `addr`. Unless there's an error, the returned socket is
 // already reading in a different goroutine and is ready to be used.
 func Connect(how, addr string) (Sock, error) {
-  s := NewSock(DefaultHandlers)
-  if err := s.Connect(how, addr); err != nil {
+  c, err := net.Dial(how, addr)
+  if err != nil {
     return nil, err
   }
+  s := NewSock(DefaultHandlers)
+  s.Adopt(c)
   if err := s.Handshake(); err != nil {
     return nil, err
   }
@@ -112,8 +108,29 @@ func Connect(how, addr string) (Sock, error) {
 // Start a `how` server listening for connections at `addr`. You need to call Accept() on the
 // returned socket to start accepting connections.
 func Listen(how, addr string) (Sock, error) {
+  l, err := net.Listen(how, addr)
+  if err != nil {
+    return nil, err
+  }
+
   s := NewSock(DefaultHandlers)
-  return s, s.Listen(how, addr)
+  s.AdoptListener(l)
+
+  if how == "unix" || how == "unixpacket" {
+    // Unix sockets must be unlink()ed before being reused again.
+    // Handle common process-killing signals so we can gracefully shut down.
+    sigc := make(chan os.Signal, 1)
+    signal.Notify(sigc, os.Interrupt, os.Kill, syscall.SIGTERM)
+    go func(c chan os.Signal) {
+      <-c  // Wait for a signal
+      //sig := <-c  // Wait for a signal
+      //log.Printf("Caught signal %s: shutting down.", sig)
+      s.Close()  // Stop listening and unlink the socket
+      os.Exit(0)
+    }(sigc)
+  }
+
+  return s, nil
 }
 
 // Start a `how` server accepting connections at `addr`.
@@ -158,47 +175,11 @@ func (s *socket) Adopt(c io.ReadWriteCloser) {
 }
 
 
-func (s *socket) Connect(how, addr string) error {
-  c, err := net.Dial(how, addr)
-  if err != nil {
-    return err
-  }
-  s.Adopt(c)
-  return nil
-}
-
-
 func (s *socket) AdoptListener(listener net.Listener) {
   if s.listener != nil || s.conn != nil {
     panic("already adopted")
   }
   s.listener = listener
-}
-
-
-func (s *socket) Listen(how, addr string) error {
-  l, err := net.Listen(how, addr)
-  if err != nil {
-    return err
-  }
-
-  s.AdoptListener(l)
-
-  if how == "unix" || how == "unixpacket" {
-    // Unix sockets must be unlink()ed before being reused again.
-    // Handle common process-killing signals so we can gracefully shut down.
-    sigc := make(chan os.Signal, 1)
-    signal.Notify(sigc, os.Interrupt, os.Kill, syscall.SIGTERM)
-    go func(c chan os.Signal) {
-      <-c  // Wait for a signal
-      //sig := <-c  // Wait for a signal
-      //log.Printf("Caught signal %s: shutting down.", sig)
-      s.Close()  // Stop listening and unlink the socket
-      os.Exit(0)
-    }(sigc)
-  }
-
-  return nil
 }
 
 
