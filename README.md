@@ -27,7 +27,7 @@ There are a few examples in the `examples` directory demonstrating Gotalk. But l
 
 ```go
 func server() {
-  gotalk.HandleRequest("greet", func(in GreetIn) (GreetOut, error) {
+  gotalk.Handle("greet", func(in GreetIn) (GreetOut, error) {
     return GreetOut{"Hello " + in.Name}, nil
   })
   if err := gotalk.Serve("tcp", "localhost:1234"); err != nil {
@@ -76,7 +76,7 @@ Registers a process-global request handler for an operation called "greet" accep
 
 ```go
 func server() {
-  gotalk.HandleRequest("greet", func(in GreetIn) (GreetOut, error) {
+  gotalk.Handle("greet", func(in GreetIn) (GreetOut, error) {
     return GreetOut{"Hello " + in.Name}, nil
   })
 ```
