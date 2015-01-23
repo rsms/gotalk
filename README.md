@@ -227,12 +227,12 @@ Here's a complete description of the protocol:
     SingleResult    = "R" requestID payload
     StreamResult    = "S" requestID payload StreamResult*
     ErrorResult     = "E" requestID payload
-    Notification    = "n" type payload
+    Notification    = "n" name payload
 
     requestID       = <byte> <byte> <byte>
 
     operation       = text3
-    type            = text3
+    name            = text3
 
     text3           = text3Size text3Value
     text3Size       = hexUInt3
@@ -259,10 +259,9 @@ This is a "single-payload" request ...
 ```py
 +----------------- SingleRequest
 |  +---------------- requestID   "001"
-|  |  +------------- text3Size   4
-|  |  |   +--------- operation   "echo"
-|  |  |   |       +- payloadSize 25
-|  |  |   |       |
+|  |      +--------- operation   "echo"
+|  |      |       +- payloadSize 25
+|  |      |       |
 r001004echo00000019{"message":"Hello World"}
 ```
 
@@ -296,10 +295,10 @@ When there's no expectation on a response, Gotalk provides a "notification" mess
 
 ```py
 +---------------------- Notification
-|              +--------- type        "chat message"
-|              |       +- payloadSize 50
+|              +--------- name        "chat message"
+|              |       +- payloadSize 46
 |              |       |
-n00cchat message00000032{"message":"Hi","from":"nthn","chat_room":"gonuts"}
+n00cchat message0000002e{"message":"Hi","from":"nthn","room":"gonuts"}
 ```
 
 Notifications are never replied to nor can they cause "error" results.
@@ -314,13 +313,13 @@ Here's an example of a "streaming-payload" request ...
 +----------------- StreamRequest
 |  +---------------- requestID   "001"
 |  |      +--------- operation   "echo"
-|  |      |       +- payloadSize 25
+|  |      |       +- payloadSize 11
 |  |      |       |
 s001004echo0000000b{"message":
 
 +----------------- streamReqPart
 |  +---------------- requestID   "001"
-|  |       +-------- payloadSize 25
+|  |       +-------- payloadSize 14
 |  |       |
 p0010000000e"Hello World"}
 
@@ -336,13 +335,13 @@ p00100000000
 ```py
 +----------------- StreamResult (1st part)
 |  +---------------- requestID   "001"
-|  |       +-------- payloadSize 25
+|  |       +-------- payloadSize 11
 |  |       |
 S0010000000b{"message":
 
 +----------------- StreamResult (2nd part)
 |  +---------------- requestID   "001"
-|  |       +-------- payloadSize 25
+|  |       +-------- payloadSize 14
 |  |       |
 S0010000000e"Hello World"}
 
