@@ -24,7 +24,6 @@ type Sock struct {
   // (the default) while setting this to a large number might be cause for security concerns
   // as a malicious peer could send many "start stream" messages, but never sending
   // any "end stream" messages, slowly exhausting memory.
-  // When accepting connections, connected sockets inherit this value.
   StreamReqLimit int
 
   // A function to be called when the socket closes
@@ -35,12 +34,12 @@ type Sock struct {
   wmu            sync.Mutex          // guards writes on conn
   conn           io.ReadWriteCloser  // non-nil after successful call to Connect or accept
 
-  // Used for performing requests:
+  // Used for sending requests:
   nextOpID       uint
   pendingRes     pendingResMap
   pendingResMu   sync.RWMutex
 
-  // Used for streaming requests:
+  // Used for handling streaming requests:
   pendingReq     pendingReqMap
   pendingReqMu   sync.RWMutex
 }

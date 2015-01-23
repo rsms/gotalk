@@ -353,6 +353,11 @@ S00100000000
 Requests and results does not need to match on the "single" vs "streaming" detail — it's perfectly fine to send a streaming request and read a single response, or send a single response just to receive a streaming result. *The payload type is orthogonal to the message type*, with the exception of an error response which is always a "single-payload" message, carrying any information about the error in its payload. Note however that the current version of the Go package does not provide a high-level API for mixed-kind request-response handling.
 
 
+## Other implementations
+
+- <https://github.com/gtaylor/python-gotalk>
+
+
 ## MIT license
 
 Copyright (c) 2015 Rasmus Andersson <http://rsms.me/>
