@@ -38,20 +38,21 @@ type RoomMap map[string]*Room
 var (
   rooms   RoomMap
   roomsmu sync.RWMutex
-  socks   map[gotalk.Sock]int
+  socks   map[*gotalk.Sock]int
   socksmu sync.RWMutex
 )
 
-func onAccept(s gotalk.Sock) {
+func onAccept(s *gotalk.Sock) {
   // Keep track of connected sockets
   socksmu.Lock()
   defer socksmu.Unlock()
   socks[s] = 1
-  s.SetCloseFunc(func (s gotalk.Sock) {
+
+  s.CloseHandler = func (s *gotalk.Sock) {
     socksmu.Lock()
     defer socksmu.Unlock()
     delete(socks, s)
-  })
+  }
 
   // Send list of rooms
   roomsmu.RLock()
@@ -60,7 +61,7 @@ func onAccept(s gotalk.Sock) {
 
   // Assign the socket a random username
   username := randomName()
-  s.SetUserData(username)
+  s.UserData = username
   s.Notify("username", username)
 }
 
@@ -104,7 +105,7 @@ func randomName() string {
 }
 
 func main() {
-  socks = make(map[gotalk.Sock]int)
+  socks = make(map[*gotalk.Sock]int)
   rooms = make(RoomMap)
 
   // Load names data
@@ -132,11 +133,11 @@ func main() {
     return room.messages, nil
   })
 
-  gotalk.Handle("send-message", func(s gotalk.Sock, r NewMessage) error {
+  gotalk.Handle("send-message", func(s *gotalk.Sock, r NewMessage) error {
     if len(r.Message.Body) == 0 {
       return errors.New("empty message")
     }
-    username, _ := s.GetUserData().(string)
+    username, _ := s.UserData.(string)
     room := findRoom(r.Room)
     room.appendMessage(&Message{username, r.Message.Body})
     r.Message.Author = username

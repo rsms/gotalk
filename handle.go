@@ -6,77 +6,81 @@ import (
   "encoding/json"
 )
 
-type Handlers interface {
-  // Handle operation with automatic JSON encoding of values.
-  //
-  // `f` must conform to one of the following signatures:
-  //   `func(Sock, string, interface{}) (interface{}, error)` -- takes socket, op and parameters
-  //   `func(Sock, interface{}) (interface{}, error)`         -- takes socket and parameters
-  //   `func(interface{}) (interface{}, error)`               -- takes parameters, but no socket
-  //   `func(Sock) (interface{}, error)`                      -- takes no parameters
-  //   `func() (interface{},error)`                           -- takes no socket or parameters
-  // Where optionally the `interface{}` return value can be omitted, i.e:
-  //   `func(Sock, string, interface{}) error`
-  //   `func(Sock, interface{}) error`
-  //   `func(interface{}) error`
-  //   `func(Sock) error`
-  //   `func() error`
-  //
-  // If `op` is empty, handle all requests which doesn't have a specific handler registered.
-  HandleRequest(op string, f interface{})
-
-  // Handle operation with raw input and output buffers. If `op` is empty, handle
-  // all requests which doesn't have a specific handler registered.
-  HandleBufferRequest(op string, f BufferReqHandler)
-
-  // Handle operation by reading and writing directly from/to the underlying stream.
-  // If `op` is empty, handle all requests which doesn't have a specific handler registered.
-  HandleStreamRequest(op string, f StreamReqHandler)
-
-  // Handle notifications of a certain name with automatic JSON encoding of values.
-  //
-  // `f` must conform to one of the following signatures:
-  //   `func(s Sock, name string, v interface{})` -- takes socket, name and parameters
-  //   `func(name string, v interface{})`         -- takes name and parameters, but no socket
-  //   `func(v interface{})`                      -- takes only parameters
-  //
-  // If `name` is empty, handle all notifications which doesn't have a specific handler
-  // registered.
-  HandleNotification(name string, f interface{})
-
-  // Handle notifications of a certain name with raw input buffers. If `name` is empty, handle
-  // all notifications which doesn't have a specific handler registered.
-  HandleBufferNotification(name string, f BufferNoteHandler)
+type Handlers struct {
 
   // Look up a handler for operation `op`. Returns `nil` if not found.
-  FindRequestHandler(op string) interface{}
-  FindNotificationHandler(name string) BufferNoteHandler
+  // FindRequestHandler(op string) interface{}
+  // FindNotificationHandler(name string) BufferNoteHandler
+
+  reqHandlersMu       sync.RWMutex
+  reqHandlers         reqHandlerMap
+  reqFallbackHandler  interface{}
+  notesMu             sync.RWMutex
+  noteHandlers        noteHandlerMap
+  noteFallbackHandler BufferNoteHandler
 }
 
-func NewHandlers() Handlers {
-  return &handlers{reqHandlers:make(reqHandlerMap), noteHandlers:make(noteHandlerMap)}
+func NewHandlers() *Handlers {
+  return &Handlers{reqHandlers:make(reqHandlerMap), noteHandlers:make(noteHandlerMap)}
 }
 
-type BufferReqHandler   func(s Sock, op string, payload []byte) ([]byte, error)
-type BufferNoteHandler  func(s Sock, name string, payload []byte)
-type StreamReqHandler   func(s Sock, name string, rch chan []byte, write StreamWriter) error
-                        // ^EOS when <-rch==nil
+type BufferReqHandler   func(s *Sock, op string, payload []byte) ([]byte, error)
+type BufferNoteHandler  func(s *Sock, name string, payload []byte)
+
+// EOS when <-rch==nil
+type StreamReqHandler   func(s *Sock, name string, rch chan []byte, write StreamWriter) error
 type StreamWriter       func([]byte) error
 
 var DefaultHandlers = NewHandlers()
 
+// Handle operation with automatic JSON encoding of values.
+//
+// `fn` must conform to one of the following signatures:
+//   func(*Sock, string, interface{}) (interface{}, error) -- takes socket, op and parameters
+//   func(*Sock, interface{}) (interface{}, error)         -- takes socket and parameters
+//   func(interface{}) (interface{}, error)                -- takes parameters, but no socket
+//   func(*Sock) (interface{}, error)                      -- takes no parameters
+//   func() (interface{},error)                            -- takes no socket or parameters
+//
+// Where optionally the `interface{}` return value can be omitted, i.e:
+//   func(*Sock, string, interface{}) error
+//   func(*Sock, interface{}) error
+//   func(interface{}) error
+//   func(*Sock) error
+//   func() error
+//
+// If `op` is empty, handle all requests which doesn't have a specific handler registered.
 func Handle(op string, fn interface{}) {
   DefaultHandlers.HandleRequest(op, fn)
 }
+
+// Handle operation with raw input and output buffers. If `op` is empty, handle
+// all requests which doesn't have a specific handler registered.
 func HandleBufferRequest(op string, fn BufferReqHandler) {
   DefaultHandlers.HandleBufferRequest(op, fn)
 }
+
+// Handle operation by reading and writing directly from/to the underlying stream.
+// If `op` is empty, handle all requests which doesn't have a specific handler registered.
 func HandleStreamRequest(op string, fn StreamReqHandler) {
   DefaultHandlers.HandleStreamRequest(op, fn)
 }
+
+// Handle notifications of a certain name with automatic JSON encoding of values.
+//
+// `fn` must conform to one of the following signatures:
+//   func(s *Sock, name string, v interface{}) -- takes socket, name and parameters
+//   func(name string, v interface{})          -- takes name and parameters, but no socket
+//   func(v interface{})                       -- takes only parameters
+//
+// If `name` is empty, handle all notifications which doesn't have a specific handler
+// registered.
 func HandleNotification(name string, fn interface{}) {
   DefaultHandlers.HandleNotification(name, fn)
 }
+
+// Handle notifications of a certain name with raw input buffers. If `name` is empty, handle
+// all notifications which doesn't have a specific handler registered.
 func HandleBufferNotification(name string, fn BufferNoteHandler) {
   DefaultHandlers.HandleBufferNotification(name, fn)
 }
@@ -86,16 +90,7 @@ func HandleBufferNotification(name string, fn BufferNoteHandler) {
 type reqHandlerMap  map[string]interface{}
 type noteHandlerMap map[string]BufferNoteHandler
 
-type handlers struct {
-  reqHandlersMu       sync.RWMutex
-  reqHandlers         reqHandlerMap
-  reqFallbackHandler  interface{}
-  notesMu             sync.RWMutex
-  noteHandlers        noteHandlerMap
-  noteFallbackHandler BufferNoteHandler
-}
-
-func (h *handlers) setRequestHandler(op string, fn interface{}) {
+func (h *Handlers) setRequestHandler(op string, fn interface{}) {
   h.reqHandlersMu.Lock()
   defer h.reqHandlersMu.Unlock()
   if len(op) == 0 {
@@ -105,15 +100,28 @@ func (h *handlers) setRequestHandler(op string, fn interface{}) {
   }
 }
 
-func (h *handlers) HandleBufferRequest(op string, fn BufferReqHandler) {
+// See Handle()
+func (h *Handlers) HandleRequest(op string, fn interface{}) {
+  h.HandleBufferRequest(op, wrapFuncReqHandler(fn))
+}
+
+// See HandleBufferRequest()
+func (h *Handlers) HandleBufferRequest(op string, fn BufferReqHandler) {
   h.setRequestHandler(op, fn)
 }
 
-func (h *handlers) HandleStreamRequest(op string, fn StreamReqHandler) {
+// See HandleStreamRequest()
+func (h *Handlers) HandleStreamRequest(op string, fn StreamReqHandler) {
   h.setRequestHandler(op, fn)
 }
 
-func (h *handlers) HandleBufferNotification(name string, fn BufferNoteHandler) {
+// See HandleNotification()
+func (h *Handlers) HandleNotification(name string, fn interface{}) {
+  h.HandleBufferNotification(name, wrapFuncNotHandler(fn))
+}
+
+// See HandleBufferNotification()
+func (h *Handlers) HandleBufferNotification(name string, fn BufferNoteHandler) {
   h.notesMu.Lock()
   defer h.notesMu.Unlock()
   if len(name) == 0 {
@@ -123,8 +131,8 @@ func (h *handlers) HandleBufferNotification(name string, fn BufferNoteHandler) {
   }
 }
 
-
-func (h *handlers) FindRequestHandler(op string) interface{} {
+// Look up a handler for operation `op`. Returns `nil` if not found.
+func (h *Handlers) FindRequestHandler(op string) interface{} {
   h.reqHandlersMu.RLock()
   defer h.reqHandlersMu.RUnlock()
   if handler := h.reqHandlers[op]; handler != nil {
@@ -133,7 +141,8 @@ func (h *handlers) FindRequestHandler(op string) interface{} {
   return h.reqFallbackHandler
 }
 
-func (h *handlers) FindNotificationHandler(name string) BufferNoteHandler {
+// Look up a handler for notification `name`. Returns `nil` if not found.
+func (h *Handlers) FindNotificationHandler(name string) BufferNoteHandler {
   h.notesMu.RLock()
   defer h.notesMu.RUnlock()
   if handler := h.noteHandlers[name]; handler != nil {
@@ -189,12 +198,17 @@ func decodeParams(paramsType reflect.Type, inbuf []byte) (*reflect.Value, error)
 }
 
 
+func typeIsSockPtr(t reflect.Type) bool {
+  return t.Kind() == reflect.Ptr && t.Elem().AssignableTo(kSockType)
+}
+
+
 func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
   // `fn` must conform to one of the following signatures:
-  //   `func(Sock, interface{})(interface{}, error)` -- takes socket and parameters
-  //   `func(interface{})(interface{}, error)`       -- takes parameters, but no socket
-  //   `func(Sock)(interface{}, error)`              -- takes no parameters
-  //   `func()(interface{},error)`                   -- takes no socket or parameters
+  //   `func(*Sock, interface{})(interface{}, error)` -- takes socket and parameters
+  //   `func(interface{})(interface{}, error)`        -- takes parameters, but no socket
+  //   `func(*Sock)(interface{}, error)`              -- takes no parameters
+  //   `func()(interface{},error)`                    -- takes no socket or parameters
   fnv := reflect.ValueOf(fn)
   fnt := fnv.Type()
 
@@ -208,8 +222,8 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
   }
 
   if fnt.NumIn() == 3 {
-    // `func(Sock, string, interface{}) (interface{}, error)`
-    if fnt.In(0).Implements(kSockType) == false {
+    // `func(*Sock, string, interface{}) (interface{}, error)`
+    if typeIsSockPtr(fnt.In(0)) == false {
       panic(errMsgBadHandler)
     }
     if fnt.In(1).Kind() != reflect.String {
@@ -217,7 +231,7 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
     }
     paramsType := fnt.In(2)
 
-    return BufferReqHandler(func (s Sock, op string, inbuf []byte) ([]byte, error) {
+    return BufferReqHandler(func (s *Sock, op string, inbuf []byte) ([]byte, error) {
       paramsVal, err := decodeParams(paramsType, inbuf)
       if err != nil {
         return nil, err
@@ -227,13 +241,13 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
     })
 
   } else if fnt.NumIn() == 2 {
-    // Signature: `func(Sock, interface{})(interface{}, error)`
-    if fnt.In(0).Implements(kSockType) == false {
+    // Signature: `func(*Sock, interface{})(interface{}, error)`
+    if typeIsSockPtr(fnt.In(0)) == false {
       panic(errMsgBadHandler)
     }
     paramsType := fnt.In(1)
 
-    return BufferReqHandler(func (s Sock, _ string, inbuf []byte) ([]byte, error) {
+    return BufferReqHandler(func (s *Sock, _ string, inbuf []byte) ([]byte, error) {
       paramsVal, err := decodeParams(paramsType, inbuf)
       if err != nil {
         return nil, err
@@ -243,20 +257,20 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
     })
 
   } else if fnt.NumIn() == 1 {
-    if fnt.In(0).Implements(kSockType) {
+    if typeIsSockPtr(fnt.In(0)) {
       if fnt.NumOut() == 2 {
-        // Signature: `func(Sock)(interface{}, error)`
-        return BufferReqHandler(func (s Sock, _ string, _ []byte) ([]byte, error) {
+        // Signature: `func(*Sock)(interface{}, error)`
+        return BufferReqHandler(func (s *Sock, _ string, _ []byte) ([]byte, error) {
           r := fnv.Call([]reflect.Value{reflect.ValueOf(s)})
           return decodeResult(r)
         })
       } else {
-        // Signature: `func(Sock)error`
-        f, ok := fn.(func(Sock)error)
+        // Signature: `func(*Sock)error`
+        f, ok := fn.(func(*Sock)error)
         if ok == false {
           panic(errMsgBadHandler)
         }
-        return BufferReqHandler(func (s Sock, _ string, _ []byte) ([]byte, error) {
+        return BufferReqHandler(func (s *Sock, _ string, _ []byte) ([]byte, error) {
           return nil, f(s)
         })
       }
@@ -264,7 +278,7 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
     } else {
       // Signature: `func(interface{})(interface{}, error)`
       paramsType := fnt.In(0)
-      return BufferReqHandler(func (_ Sock, _ string, inbuf []byte) ([]byte, error) {
+      return BufferReqHandler(func (_ *Sock, _ string, inbuf []byte) ([]byte, error) {
         paramsVal, err := decodeParams(paramsType, inbuf)
         if err != nil {
           return nil, err
@@ -277,7 +291,7 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
   } else {
     if fnt.NumOut() == 2 {
       // Signature: `func()(interface{},error)`
-      return BufferReqHandler(func (_ Sock, _ string, _ []byte) ([]byte, error) {
+      return BufferReqHandler(func (_ *Sock, _ string, _ []byte) ([]byte, error) {
         r := fnv.Call(nil)
         return decodeResult(r)
       })
@@ -287,7 +301,7 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
       if ok == false {
         panic(errMsgBadHandler)
       }
-      return BufferReqHandler(func (_ Sock, _ string, _ []byte) ([]byte, error) {
+      return BufferReqHandler(func (_ *Sock, _ string, _ []byte) ([]byte, error) {
         return nil, f()
       })
     }
@@ -296,16 +310,11 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
 }
 
 
-func (h *handlers) HandleRequest(op string, fn interface{}) {
-  h.HandleBufferRequest(op, wrapFuncReqHandler(fn))
-}
-
-
 func wrapFuncNotHandler(fn interface{}) BufferNoteHandler {
   // `fn` must conform to one of the following signatures:
-  //   `func(Sock, string, interface{})` -- takes socket, name and parameters
-  //   `func(string, interface{})`       -- takes name and parameters, but no socket
-  //   `func(interface{})`               -- takes only parameters
+  //   `func(*Sock, string, interface{})` -- takes socket, name and parameters
+  //   `func(string, interface{})`        -- takes name and parameters, but no socket
+  //   `func(interface{})`                -- takes only parameters
   fnv := reflect.ValueOf(fn)
   fnt := fnv.Type()
 
@@ -318,13 +327,13 @@ func wrapFuncNotHandler(fn interface{}) BufferNoteHandler {
   }
 
   if fnt.NumIn() == 3 {
-    // Signature: `func(Sock, string, interface{})`
-    if fnt.In(0).Implements(kSockType) == false || fnt.In(1).Kind() != reflect.String {
+    // Signature: `func(*Sock, string, interface{})`
+    if typeIsSockPtr(fnt.In(0)) == false || fnt.In(1).Kind() != reflect.String {
       panic(errMsgBadHandler)
     }
     paramsType := fnt.In(2)
     return BufferNoteHandler(
-      func (s Sock, name string, inbuf []byte) {
+      func (s *Sock, name string, inbuf []byte) {
         paramsVal, _ := decodeParams(paramsType, inbuf)
         fnv.Call([]reflect.Value{reflect.ValueOf(s), reflect.ValueOf(name), paramsVal.Elem()})
       })
@@ -335,7 +344,7 @@ func wrapFuncNotHandler(fn interface{}) BufferNoteHandler {
     }
     paramsType := fnt.In(1)
     return BufferNoteHandler(
-      func (_ Sock, name string, inbuf []byte) {
+      func (_ *Sock, name string, inbuf []byte) {
         paramsVal, _ := decodeParams(paramsType, inbuf)
         fnv.Call([]reflect.Value{reflect.ValueOf(name), paramsVal.Elem()})
       })
@@ -343,15 +352,10 @@ func wrapFuncNotHandler(fn interface{}) BufferNoteHandler {
     // Signature: `func(interface{})`
     paramsType := fnt.In(0)
     return BufferNoteHandler(
-      func (_ Sock, _ string, inbuf []byte) {
+      func (_ *Sock, _ string, inbuf []byte) {
         paramsVal, _ := decodeParams(paramsType, inbuf)
         fnv.Call([]reflect.Value{paramsVal.Elem()})
       })
   }
-}
-
-
-func (h *handlers) HandleNotification(name string, fn interface{}) {
-  h.HandleBufferNotification(name, wrapFuncNotHandler(fn))
 }
 

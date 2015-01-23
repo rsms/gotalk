@@ -10,7 +10,7 @@ const (
   // Version of this protocol
   ProtocolVersion      = uint8(0)
 
-  // Message types
+  // Protocol message types
   MsgTypeSingleReq     = MsgType(byte('r'))
   MsgTypeStreamReq     = MsgType(byte('s'))
   MsgTypeStreamReqPart = MsgType(byte('p'))
@@ -20,37 +20,29 @@ const (
   MsgTypeNotification  = MsgType(byte('n'))
 )
 
+// Protocol message type
 type MsgType byte
-var ProtocolVersionBuf [2]byte
 
-func init() {
-  copyFixnum(ProtocolVersionBuf[:0], 2, uint64(ProtocolVersion), 16)
-}
-
-
+// Write the version this protocol implements to `s`
 func WriteVersion(s io.Writer) (int, error) {
-  return s.Write(ProtocolVersionBuf[:])
+  return s.Write(protocolVersionBuf[:])
 }
 
-func WriteSingleReq(s io.Writer, id, op string, size int) (int, error) {
-  return s.Write(MakeMsg(MsgTypeSingleReq, id, op, size))
-}
-func WriteStreamReq(s io.Writer, id, op string, size int) (int, error) {
-  return s.Write(MakeMsg(MsgTypeStreamReq, id, op, size))
-}
-func WriteStreamReqPart(s io.Writer, id string, size int) (int, error) {
-  return s.Write(MakeMsg(MsgTypeStreamReqPart, id, "", size))
-}
-
-func WriteSingleRes(s io.Writer, id string, size int) (int, error) {
-  return s.Write(MakeMsg(MsgTypeSingleRes, id, "", size))
-}
-func WriteStreamRes(s io.Writer, id string, size int) (int, error) {
-  return s.Write(MakeMsg(MsgTypeStreamRes, id, "", size))
-}
-
-func WriteErrorRes(s io.Writer, id string, size int) (int, error) {
-  return s.Write(MakeMsg(MsgTypeErrorRes, id, "", size))
+// Read the version the other end implements. Returns an error if this side's protocol
+// is incompatible with the other side's version.
+func ReadVersion(s io.Reader) (uint8, error) {
+  b := make([]byte, 2)
+  if err := readn(s, b); err != nil {
+    return 0, err
+  }
+  n, err := strconv.ParseUint(string(b), 16, 8)
+  if err != nil {
+    return 0, err
+  }
+  if n != uint64(ProtocolVersion) {
+    return 0, errors.New("unsupported protocol version \"" + string(b) + "\"")
+  }
+  return uint8(n), nil
 }
 
 
@@ -95,22 +87,7 @@ func MakeMsg(t MsgType, id, name3 string, size int) []byte {
 }
 
 
-func ReadVersion(s io.Reader) (uint8, error) {
-  b := make([]byte, 2)
-  if err := readn(s, b); err != nil {
-    return 0, err
-  }
-  n, err := strconv.ParseUint(string(b), 16, 8)
-  if err != nil {
-    return 0, err
-  }
-  if n != uint64(ProtocolVersion) {
-    return 0, errors.New("unsupported protocol version \"" + string(b) + "\"")
-  }
-  return uint8(n), nil
-}
-
-
+// Read a message from `s`
 func ReadMsg(s io.Reader) (t MsgType, id, name3 string, size uint32, err error) {
   // "r001004echo00000005" => ('r', "001", "echo", 5, nil)
   // "R00100000005"        => ('R', "001", "", 5, nil)
@@ -176,8 +153,12 @@ func ReadMsg(s io.Reader) (t MsgType, id, name3 string, size uint32, err error) 
 
 // =============================================================================
 
-
+var protocolVersionBuf [2]byte  // version as fixnum2 ([H,H] where H is any of 0-9a-fA-F)
 var zeroes = [...]byte{48,48,48,48,48,48,48,48}
+
+func init() {
+  copyFixnum(protocolVersionBuf[:0], 2, uint64(ProtocolVersion), 16)
+}
 
 
 func copyFixnum(buf []byte, ndigits int, n uint64, base int) {

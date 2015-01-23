@@ -5,7 +5,7 @@ import (
 )
 
 // Handler that can be used with the http package
-func WebSocketHandler(h Handlers, handler SockHandler) websocket.Handler {
+func WebSocketHandler(h *Handlers, handler SockHandler) websocket.Handler {
   if h == nil {
     h = DefaultHandlers
   }

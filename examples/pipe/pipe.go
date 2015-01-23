@@ -6,13 +6,7 @@ import (
 )
 
 
-func handleGreet(s gotalk.Sock, name string) (string, error) {
-  sockname, _ := s.GetUserData().(string)
-  return "Hello " + name + " from " + sockname, nil
-}
-
-
-func requestGreet(s gotalk.Sock, name string) string {
+func requestGreet(s *gotalk.Sock, name string) string {
   r := ""
   if err := s.Request("greet", name, &r); err != nil {
     panic("request error: " + err.Error())
@@ -29,11 +23,14 @@ func main() {
   }
 
   // Give the sockets names so we can include it in the greetings
-  s1.SetUserData("socket#1")
-  s2.SetUserData("socket#2")
+  s1.UserData = "socket#1"
+  s2.UserData = "socket#2"
 
   // Handle greetings
-  gotalk.Handle("greet", handleGreet)
+  gotalk.Handle("greet", func(s *gotalk.Sock, name string) (string, error) {
+    sockname, _ := s.UserData.(string)
+    return "Hello " + name + " from " + sockname, nil
+  })
 
   // Send a "greet" request to each socket, making the opposite side respond.
   log.Printf("greet(s1, \"Bob\")  => %+v\n", requestGreet(s1, "Bob"))

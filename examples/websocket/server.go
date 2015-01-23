@@ -12,7 +12,7 @@ type GreetOut struct {
   Greeting string `json:"greeting"`
 }
 
-func onAccept(s gotalk.Sock) {
+func onAccept(s *gotalk.Sock) {
   s.Notify("hello", "world")
   go func(){
     // Send a request & read result via JSON-encoded go values.
@@ -30,8 +30,8 @@ func main() {
     return GreetOut{"Hello " + in.Name}, nil
   })
 
-  gotalk.HandleBufferRequest("echó", func(s gotalk.Sock, op string, in []byte) ([]byte, error) {
-    return in, nil
+  gotalk.HandleBufferRequest("echó", func(s *gotalk.Sock, op string, b []byte) ([]byte, error) {
+    return b, nil
   })
 
   http.Handle("/gotalk", gotalk.WebSocketHandler(nil, onAccept))

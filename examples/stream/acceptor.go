@@ -28,7 +28,7 @@ func acceptor(port string) {
   // Handle streaming request & result
   gotalk.HandleStreamRequest(
     "joke",
-    func(s gotalk.Sock, op string, in chan []byte, result gotalk.StreamWriter) error {
+    func(s *gotalk.Sock, op string, in chan []byte, result gotalk.StreamWriter) error {
       // In a real-world application accepting connections from anyone on the internet, we
       // might want to schedule a timeout here, in case we never receive an "end stream" message. 
 
@@ -58,7 +58,7 @@ func acceptor(port string) {
   if err != nil {
     panic(err)
   }
-  s.SetStreamReqLimit(3)  // Enable streaming requests
+  s.StreamReqLimit = 3  // Enable streaming requests
   println("listening at", s.Addr())
-  go s.Accept(nil)
+  go s.Accept()
 }

@@ -2,7 +2,7 @@ package main
 import (
   "fmt"
   "log"
-  . "github.com/rsms/gotalk"
+  "github.com/rsms/gotalk"
 )
 
 type GreetIn struct {
@@ -13,12 +13,12 @@ type GreetOut struct {
 }
 
 func main() {
-  HandleBufferRequest("ping", func(s Sock, op string, inbuf []byte) ([]byte, error) {
-    println("in ping handler: inbuf=", string(inbuf))
+  gotalk.HandleBufferRequest("ping", func(_ *gotalk.Sock, _ string, b []byte) ([]byte, error) {
+    println("in ping handler: b=", string(b))
     return []byte("pong"), nil
   })
 
-  s, err := Connect("tcp", "localhost:1234")
+  s, err := gotalk.Connect("tcp", "localhost:1234")
   if err != nil {
     log.Fatalln(err)
   }
@@ -33,11 +33,11 @@ func main() {
   }
 
   // Send a request & read result as byte strings
-  outbuf, err := s.BufferRequest("echo", []byte("abc"))
+  b, err := s.BufferRequest("echo", []byte("abc"))
   if err != nil {
     fmt.Printf("echo: %v\n", err.Error())
   } else {
-    fmt.Printf("echo: %v\n", string(outbuf))
+    fmt.Printf("echo: %v\n", string(b))
   }
 
   // Send a notification as JSON

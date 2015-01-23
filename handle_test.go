@@ -15,7 +15,7 @@ func recoverAsFail(t *testing.T) {
 }
 
 
-func checkReqHandler(t *testing.T, s Sock, h Handlers, name, input, expectedOutput string) {
+func checkReqHandler(t *testing.T, s *Sock, h *Handlers, name, input, expectedOutput string) {
   if hv := h.FindRequestHandler(name); hv == nil {
     t.Errorf("handler '%s' not found", name)
   } else if a, ok := hv.(BufferReqHandler); ok == false {
@@ -37,14 +37,14 @@ func TestRequestFuncHandlers(t *testing.T) {
   invocationCount := 0
 
   // All possible handler func permutations (with `int` value types)
-  h.HandleRequest("a", func(s Sock, op string, p int) (int, error) {
+  h.HandleRequest("a", func(s *Sock, op string, p int) (int, error) {
     if op != "a" {
       t.Errorf("expected op='a' but got '%s'", op)
     }
     invocationCount++
     return p+1, nil
   })
-  h.HandleRequest("b", func(s Sock, p int) (int, error) {
+  h.HandleRequest("b", func(s *Sock, p int) (int, error) {
     invocationCount++
     return p+1, nil
   })
@@ -52,7 +52,7 @@ func TestRequestFuncHandlers(t *testing.T) {
     invocationCount++
     return p+1, nil
   })
-  h.HandleRequest("d", func(s Sock) (int, error) {
+  h.HandleRequest("d", func(s *Sock) (int, error) {
     invocationCount++
     return 1, nil
   })
@@ -60,14 +60,14 @@ func TestRequestFuncHandlers(t *testing.T) {
     invocationCount++
     return 1, nil
   })
-  h.HandleRequest("f", func(s Sock, op string, p int) error {
+  h.HandleRequest("f", func(s *Sock, op string, p int) error {
     if op != "f" {
       t.Errorf("expected op='f' but got '%s'", op)
     }
     invocationCount++
     return nil
   })
-  h.HandleRequest("g", func(s Sock, p int) error {
+  h.HandleRequest("g", func(s *Sock, p int) error {
     invocationCount++
     return nil
   })
@@ -75,7 +75,7 @@ func TestRequestFuncHandlers(t *testing.T) {
     invocationCount++
     return nil
   })
-  h.HandleRequest("i", func(s Sock) error {
+  h.HandleRequest("i", func(s *Sock) error {
     invocationCount++
     return nil
   })
@@ -83,7 +83,7 @@ func TestRequestFuncHandlers(t *testing.T) {
     invocationCount++
     return nil
   })
-  h.HandleRequest("", func(s Sock, op string, p int) error {
+  h.HandleRequest("", func(s *Sock, op string, p int) error {
     if op != "fallback1" && op != "fallback2" {
       t.Errorf("expected op='fallback1'||'fallback2' but got '%s'", op)
     }
@@ -112,7 +112,7 @@ func TestRequestFuncHandlers(t *testing.T) {
 }
 
 
-func checkNotHandler(t *testing.T, s Sock, h Handlers, name, input string) {
+func checkNotHandler(t *testing.T, s *Sock, h *Handlers, name, input string) {
   if a := h.FindNotificationHandler(name); h == nil {
     t.Errorf("handler '%s' not found", name)
   } else {
@@ -127,7 +127,7 @@ func TestNotificationFuncHandlers(t *testing.T) {
   invocationCount := 0
 
   // All possible handler func permutations (with `int` value types)
-  h.HandleNotification("a", func(s Sock, name string, p int) {
+  h.HandleNotification("a", func(s *Sock, name string, p int) {
     if name != "a" { t.Errorf("expected name='a' but got '%s'", name) }
     if p != 1 { t.Errorf("expected p='1' but got '%v'", p) }
     invocationCount++
