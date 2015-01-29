@@ -15,6 +15,7 @@ This branch houses the development of version 1 of the protocol and implementati
     - Responders reply to rate 
   - We might need to add timeouts (read, write, handle). See [http.Server](https://golang.org/src/net/http/server.go#L1611)
   - Go package's `Server` should handle temporary errors. See [http.Serve](https://golang.org/src/net/http/server.go#L1724) for an idea of how.
+  - We might want to add a "status" protocol message which can be used to implement things like token-ring load balancing and simple heartbeats. It should make use of at least 12 bytes (apart from type byte) to not increase complexity of protocol implementations.
 - **Protocol changes:**
   - `requestID` is now 4 bytes, making it easier to produce from a 32-bit integer
   - New message type `RetryResult`
@@ -314,7 +315,7 @@ r0001004echo00000019{"message":"Hello World"}
 R000100000019{"message":"Hello World"}
 ```
 
-Each request is identified by exactly three bytes—the `requestID`—which is requestor-specific and has no purpose beyond identity, meaning the value is never interpreted. 4 bytes can express 4 294 967 295 different values, meaning we can send up to 4 294 967 294 requests while another request is still being served. Should be enough.
+Each request is identified by exactly three bytes—the `requestID`—which is requestor-specific and has no purpose beyond identity, meaning the value is never interpreted. 4 bytes can express 4 294 967 296 different values, meaning we can send up to 4 294 967 295 requests while another request is still being served. Should be enough.
 
 These "single" requests & results are the most common protocol messages, and as their names indicates, their payloads follow immediately after the header. For large payloads this can become an issue when dealing with many concurrent requests over a single connection, for which there's a more complicated "streaming" request & result type which we will explore later on.
 
