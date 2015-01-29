@@ -1,3 +1,33 @@
+# Branch "v1"
+
+This branch houses the development of version 1 of the protocol and implementations.
+
+- **Learn from using the draft v0 protocol**
+  - Found there needs to be a distinction between an error which was caused by a faulty request and an error caused by a temporarily faulty responder.
+    - Essentially:
+      - Requestors should retry a request when the responder has a temporary fault (e.g. service restarting, internal database connection error.)
+      - Requestors must not retry a request that's faulty itself (e.g. missing parameters, not authenticated.)
+    - v1 introduces a new error response: `RetryResult`
+      - A requestor receiving a RetryResult conditionally retries the request (see details in readme's protocol docs.)
+  - Rate and resource limiting must be implemented in the libraries
+    - A `Limits` component is introduced which enabled control over request concurrency
+    - Still need to figure out: Should we add high-level functionality to rate-limit individual connections, or should we leave that to application code (to i.e. assign custom Limits to Socks) ?
+    - Responders reply to rate 
+  - We might need to add timeouts (read, write, handle). See [http.Server](https://golang.org/src/net/http/server.go#L1611)
+  - Go package's `Server` should handle temporary errors. See [http.Serve](https://golang.org/src/net/http/server.go#L1724) for an idea of how.
+- **Protocol changes:**
+  - `requestID` is now 4 bytes, making it easier to produce from a 32-bit integer
+  - New message type `RetryResult`
+- **Go package:**
+  - Isolate and handle recoverable errors in handlers
+  - Do not dispatch goroutines for single-buffer handlers
+    - Adds flexibility and makes it possible to implement serialization (in the app layer)
+    - Need to change the API for single-buffer handler type `BufferReqHandler` to take a "reply writer" of some kind (maybe a chan) rather than returning a buf, which would no longer be possible.
+    - Question: Is it worth the work, added code complexity? Is there a performance impact for the common case?
+- **JavaScript package:**
+  - Provide "stay connected" functionality as it's a very common thing to want to do in web browser applications.
+
+
 # gotalk
 
 [Gotalk](https://github.com/rsms/gotalk) exists to make it easy for programs to *talk with one another over the internet*, like a web app coordinating with a web server, or a bunch of programs dividing work amongst eachother.
@@ -16,7 +46,7 @@ Gotalk takes the natural approach of *bidirectional* and *concurrent* communicat
 
 **Simple** — Gotalk has a simple and opinionated API with very few components. You expose an operation via "handle" and send requests via "request".
 
-**Debuggable** — The Gotalk protocol's wire format is ASCII-based for easy on-the-wire inspection of data. For example, here's a protocol message representing an operation request: `r001005hello00000005world`. The Gotalk protocol can thus be operated over any reliable byte transport.
+**Debuggable** — The Gotalk protocol's wire format is ASCII-based for easy on-the-wire inspection of data. For example, here's a protocol message representing an operation request: `r0001005hello00000005world`. The Gotalk protocol can thus be operated over any reliable byte transport.
 
 **Practical** — Gotalk includes a JavaScript implementation for Web Sockets alongside the full-featured Go implementation, making it easy to build real-time web applications. The Gotalk source code also includes a number of easily-readable examples.
 
@@ -231,7 +261,7 @@ Here's a complete description of the protocol:
     RetryResult     = "e" requestID wait payload
     Notification    = "n" name payload
 
-    requestID       = <byte> <byte> <byte>
+    requestID       = <byte> <byte> <byte> <byte>
 
     operation       = text3
     name            = text3
@@ -266,25 +296,25 @@ If the version of the protocol spoken by the other end is not supported by the r
 This is a "single-payload" request ...
 
 ```py
-+----------------- SingleRequest
-|  +---------------- requestID   "001"
-|  |      +--------- operation   "echo"
-|  |      |       +- payloadSize 25
-|  |      |       |
-r001004echo00000019{"message":"Hello World"}
++------------------ SingleRequest
+|   +---------------- requestID   "0001"
+|   |      +--------- operation   "echo"
+|   |      |       +- payloadSize 25
+|   |      |       |
+r0001004echo00000019{"message":"Hello World"}
 ```
 
 ... and a corresponding "single-payload" result:
 
 ```py
-+----------------- SingleResult
-|  +---------------- requestID   "001"
-|  |       +-------- payloadSize 25
-|  |       |
-R00100000019{"message":"Hello World"}
++------------------ SingleResult
+|   +---------------- requestID   "0001"
+|   |       +-------- payloadSize 25
+|   |       |
+R000100000019{"message":"Hello World"}
 ```
 
-Each request is identified by exactly three bytes—the `requestID`—which is requestor-specific and has no purpose beyond identity, meaning the value is never interpreted.
+Each request is identified by exactly three bytes—the `requestID`—which is requestor-specific and has no purpose beyond identity, meaning the value is never interpreted. 4 bytes can express 4 294 967 295 different values, meaning we can send up to 4 294 967 294 requests while another request is still being served. Should be enough.
 
 These "single" requests & results are the most common protocol messages, and as their names indicates, their payloads follow immediately after the header. For large payloads this can become an issue when dealing with many concurrent requests over a single connection, for which there's a more complicated "streaming" request & result type which we will explore later on.
 
@@ -296,11 +326,11 @@ There are two types of replies indicating a fault: `ErrorResult` for requestor f
 If a request is faulty, like missing some required input data or sent over an unauthorized connection, an "error" is send as the reply instead of a regular result:
 
 ```py
-+----------------- ErrorResult
-|  +---------------- requestID   "001"
-|  |       +-------- payloadSize 38
-|  |       |
-E00100000026{"error":"Unknown operation \"echo\""}
++------------------ ErrorResult
+|   +---------------- requestID   "0001"
+|   |       +-------- payloadSize 38
+|   |       |
+E000100000026{"error":"Unknown operation \"echo\""}
 ```
 
 A request that produces an error should not be retried as-is, similar to the 400-class of errors of the HTTP protocol.
@@ -308,12 +338,12 @@ A request that produces an error should not be retried as-is, similar to the 400
 In the scenario a fault occurs on the responder side, like suffering a temporary internal error or is unable to complete the request because of resource starvation, a RetryResult is sent as the reply to a request:
 
 ```py
-+------------------- RetryResult
-|  +------------------ requestID   "001"
-|  |       +---------- wait        0
-|  |       |       +-- payloadSize 20
-|  |       |       |
-e0010000000000000014"service restarting"
++-------------------- RetryResult
+|   +------------------ requestID   "0001"
+|   |       +---------- wait        0
+|   |       |       +-- payloadSize 20
+|   |       |       |
+e00010000000000000014"service restarting"
 ```
 
 In this case — where `wait` is zero — the requestor is free to retry the request at its convenience.
@@ -321,12 +351,12 @@ In this case — where `wait` is zero — the requestor is free to retry the req
 However in some scenarios the responder might require the requestor to wait for some time before retrying the request, in which case the `wait` property has a non-zero value:
 
 ```py
-+------------------- RetryResult
-|  +------------------ requestID   "001"
-|  |       +---------- wait        5000 ms
-|  |       |       +-- payloadSize 20
-|  |       |       |
-e0010000138800000014"request rate limit"
++-------------------- RetryResult
+|   +------------------ requestID   "0001"
+|   |       +---------- wait        5000 ms
+|   |       |       +-- payloadSize 20
+|   |       |       |
+e00010000138800000014"request rate limit"
 ```
 
 In this case the requestor must not retry the request until at least 5000 milliseconds has passed.
@@ -341,57 +371,57 @@ Because transmitting a streaming request or result does not occupy "the line" (s
 Here's an example of a "streaming-payload" request ...
 
 ```py
-+----------------- StreamRequest
-|  +---------------- requestID   "001"
-|  |      +--------- operation   "echo"
-|  |      |       +- payloadSize 11
-|  |      |       |
-s001004echo0000000b{"message":
++------------------ StreamRequest
+|   +---------------- requestID   "0001"
+|   |      +--------- operation   "echo"
+|   |      |       +- payloadSize 11
+|   |      |       |
+s0001004echo0000000b{"message":
 
-+----------------- streamReqPart
-|  +---------------- requestID   "001"
-|  |       +-------- payloadSize 14
-|  |       |
-p0010000000e"Hello World"}
++------------------ streamReqPart
+|   +---------------- requestID   "0001"
+|   |       +-------- payloadSize 14
+|   |       |
+p00010000000e"Hello World"}
 
-+----------------- streamReqPart
-|  +---------------- requestID   "001"
-|  |       +-------- payloadSize 0 (end of stream)
-|  |       |
-p00100000000
++------------------ streamReqPart
+|   +---------------- requestID   "0001"
+|   |       +-------- payloadSize 0 (end of stream)
+|   |       |
+p000100000000
 ```
 
 ... followed by a "streaming-payload" result:
 
 ```py
-+----------------- StreamResult (1st part)
-|  +---------------- requestID   "001"
-|  |       +-------- payloadSize 11
-|  |       |
-S0010000000b{"message":
++------------------ StreamResult (1st part)
+|   +---------------- requestID   "0001"
+|   |       +-------- payloadSize 11
+|   |       |
+S00010000000b{"message":
 
-+----------------- StreamResult (2nd part)
-|  +---------------- requestID   "001"
-|  |       +-------- payloadSize 14
-|  |       |
-S0010000000e"Hello World"}
++------------------ StreamResult (2nd part)
+|   +---------------- requestID   "0001"
+|   |       +-------- payloadSize 14
+|   |       |
+S00010000000e"Hello World"}
 
-+----------------- StreamResult
-|  +---------------- requestID   "001"
-|  |       +-------- payloadSize 0 (end of stream)
-|  |       |
-S00100000000
++------------------ StreamResult
+|   +---------------- requestID   "0001"
+|   |       +-------- payloadSize 0 (end of stream)
+|   |       |
+S000100000000
 ```
 
 Streaming requests occupy resources on the responder's side for the duration of the "stream session". Therefore handling of streaming requests should be limited and "RetryResult" used to throttle requests:
 
 ```py
-+------------------- RetryResult
-|  +------------------ requestID   "001"
-|  |       +---------- wait        5000 ms
-|  |       |       +-- payloadSize 19
-|  |       |       |
-e0010000138800000013"stream rate limit"
++-------------------- RetryResult
+|   +------------------ requestID   "0001"
+|   |       +---------- wait        5000 ms
+|   |       |       +-- payloadSize 19
+|   |       |       |
+e00010000138800000013"stream rate limit"
 ```
 
 This means that the requestor must not send any new requests until `wait` time has passed.
