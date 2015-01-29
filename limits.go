@@ -28,7 +28,7 @@ type Limits interface {
 // - If `requestLimit` is 0, buffer requests aren't limited, but stream requests are limited
 //   to `streamRequestLimit`.
 //
-func NewLimits(requestLimit uint64, streamRequestLimit uint64) Limits {
+func NewLimits(requestLimit uint32, streamRequestLimit uint32) Limits {
   if requestLimit == 0 && streamRequestLimit == 0 {
     return noLimitNoStream(false)
 
@@ -118,12 +118,12 @@ func (l *limitSingleAndStream) decStreamReq() {
 // -----------------------------------------------------------------------------------------------
 
 type limit struct {
-  limit uint64
-  count uint64
+  limit uint32
+  count uint32
 }
 
 func (l *limit) inc() bool {
-  n := atomic.AddUint64(&l.count, 1)
+  n := atomic.AddUint32(&l.count, 1)
   if n >= l.limit {
     l.dec()
     return false
@@ -132,7 +132,7 @@ func (l *limit) inc() bool {
 }
 
 func (l *limit) dec() {
-  atomic.AddUint64(&l.count, ^uint64(0))  // see godoc sync/atomic/#AddUint64
+  atomic.AddUint32(&l.count, ^uint32(0))  // see godoc sync/atomic/#AddUint32
 }
 
 // -----------------------------------------------------------------------------------------------
