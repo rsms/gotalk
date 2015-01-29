@@ -15,8 +15,8 @@ type Server struct {
   // Handlers associated with this listener. Accepted sockets inherit the value.
   Handlers *Handlers
 
-  // Default value for accepted sockets' StreamReqLimit
-  StreamReqLimit int
+  // Limits. Accepted sockets are subject to the same limits.
+  Limits Limits
 
   // Function to be invoked just after a new socket connection has been accepted and
   // protocol handshake has sucessfully completed. At this point the socket is ready
@@ -28,20 +28,21 @@ type Server struct {
 }
 
 
-func NewServer(h *Handlers, l net.Listener) *Server {
-  return &Server{Handlers:h, listener:l}
+func NewServer(h *Handlers, limits Limits, l net.Listener) *Server {
+  return &Server{Handlers:h, Limits:limits, listener:l}
 }
 
 
 // Start a `how` server listening for connections at `addr`. You need to call Accept() on the
 // returned socket to start accepting connections.
+// The returned server has Handlers=DefaultHandlers and Limits=DefaultLimits.
 func Listen(how, addr string) (*Server, error) {
   l, err := net.Listen(how, addr)
   if err != nil {
     return nil, err
   }
 
-  s := NewServer(DefaultHandlers, l)
+  s := NewServer(DefaultHandlers, DefaultLimits, l)
 
   if how == "unix" || how == "unixpacket" {
     // Unix sockets must be unlink()ed before being reused again.
@@ -85,13 +86,12 @@ func (s *Server) Accept() error {
 
 func (s *Server) accept(c net.Conn) {
   s2 := NewSock(s.Handlers)
-  s2.StreamReqLimit = s.StreamReqLimit
   s2.Adopt(c)
   if err := s2.Handshake(); err == nil {
     if s.AcceptHandler != nil {
       s.AcceptHandler(s2)
     }
-    s2.Read()
+    s2.Read(s.Limits)
   }
 }
 

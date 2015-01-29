@@ -7,23 +7,28 @@ import (
 )
 
 type Handlers struct {
+  bufReqHandlersMu          sync.RWMutex
+  bufReqHandlers            bufReqHandlerMap
+  bufReqFallbackHandler     BufferReqHandler
 
-  // Look up a handler for operation `op`. Returns `nil` if not found.
-  // FindRequestHandler(op string) interface{}
-  // FindNotificationHandler(name string) BufferNoteHandler
+  streamReqHandlersMu       sync.RWMutex
+  streamReqHandlers         streamReqHandlerMap
+  streamReqFallbackHandler  StreamReqHandler
 
-  reqHandlersMu       sync.RWMutex
-  reqHandlers         reqHandlerMap
-  reqFallbackHandler  interface{}
-  notesMu             sync.RWMutex
-  noteHandlers        noteHandlerMap
-  noteFallbackHandler BufferNoteHandler
+  notesMu                   sync.RWMutex
+  noteHandlers              noteHandlerMap
+  noteFallbackHandler       BufferNoteHandler
 }
 
 func NewHandlers() *Handlers {
-  return &Handlers{reqHandlers:make(reqHandlerMap), noteHandlers:make(noteHandlerMap)}
+  return &Handlers{
+    bufReqHandlers:    make(bufReqHandlerMap),
+    streamReqHandlers: make(streamReqHandlerMap),
+    noteHandlers:      make(noteHandlerMap)}
 }
 
+// If a handler panics, it's assumed that the effect of the panic was isolated to the active
+// request. Panic is recovered, a stack trace is logged, and connection is closed.
 type BufferReqHandler   func(s *Sock, op string, payload []byte) ([]byte, error)
 type BufferNoteHandler  func(s *Sock, name string, payload []byte)
 
@@ -87,18 +92,10 @@ func HandleBufferNotification(name string, fn BufferNoteHandler) {
 
 // -------------------------------------------------------------------------------------
 
-type reqHandlerMap  map[string]interface{}
-type noteHandlerMap map[string]BufferNoteHandler
+type bufReqHandlerMap    map[string]BufferReqHandler
+type streamReqHandlerMap map[string]StreamReqHandler
+type noteHandlerMap      map[string]BufferNoteHandler
 
-func (h *Handlers) setRequestHandler(op string, fn interface{}) {
-  h.reqHandlersMu.Lock()
-  defer h.reqHandlersMu.Unlock()
-  if len(op) == 0 {
-    h.reqFallbackHandler = fn
-  } else {
-    h.reqHandlers[op] = fn
-  }
-}
 
 // See Handle()
 func (h *Handlers) HandleRequest(op string, fn interface{}) {
@@ -107,12 +104,24 @@ func (h *Handlers) HandleRequest(op string, fn interface{}) {
 
 // See HandleBufferRequest()
 func (h *Handlers) HandleBufferRequest(op string, fn BufferReqHandler) {
-  h.setRequestHandler(op, fn)
+  h.bufReqHandlersMu.Lock()
+  defer h.bufReqHandlersMu.Unlock()
+  if len(op) == 0 {
+    h.bufReqFallbackHandler = fn
+  } else {
+    h.bufReqHandlers[op] = fn
+  }
 }
 
 // See HandleStreamRequest()
 func (h *Handlers) HandleStreamRequest(op string, fn StreamReqHandler) {
-  h.setRequestHandler(op, fn)
+  h.streamReqHandlersMu.Lock()
+  defer h.streamReqHandlersMu.Unlock()
+  if len(op) == 0 {
+    h.streamReqFallbackHandler = fn
+  } else {
+    h.streamReqHandlers[op] = fn
+  }
 }
 
 // See HandleNotification()
@@ -131,14 +140,24 @@ func (h *Handlers) HandleBufferNotification(name string, fn BufferNoteHandler) {
   }
 }
 
-// Look up a handler for operation `op`. Returns `nil` if not found.
-func (h *Handlers) FindRequestHandler(op string) interface{} {
-  h.reqHandlersMu.RLock()
-  defer h.reqHandlersMu.RUnlock()
-  if handler := h.reqHandlers[op]; handler != nil {
+// Look up a single-buffer handler for operation `op`. Returns `nil` if not found.
+func (h *Handlers) FindBufferRequestHandler(op string) BufferReqHandler {
+  h.bufReqHandlersMu.RLock()
+  defer h.bufReqHandlersMu.RUnlock()
+  if handler := h.bufReqHandlers[op]; handler != nil {
     return handler
   }
-  return h.reqFallbackHandler
+  return h.bufReqFallbackHandler
+}
+
+// Look up a stream handler for operation `op`. Returns `nil` if not found.
+func (h *Handlers) FindStreamRequestHandler(op string) StreamReqHandler {
+  h.streamReqHandlersMu.RLock()
+  defer h.streamReqHandlersMu.RUnlock()
+  if handler := h.streamReqHandlers[op]; handler != nil {
+    return handler
+  }
+  return h.streamReqFallbackHandler
 }
 
 // Look up a handler for notification `name`. Returns `nil` if not found.

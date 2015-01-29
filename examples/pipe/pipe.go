@@ -16,8 +16,8 @@ func requestGreet(s *gotalk.Sock, name string) string {
 
 
 func main() {
-  // Create two connected sockets
-  s1, s2, err := gotalk.Pipe()
+  // Create two connected sockets with default handlers and limits
+  s1, s2, err := gotalk.Pipe(nil, nil)
   if err != nil {
     panic(err.Error())
   }

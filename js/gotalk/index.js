@@ -53,14 +53,15 @@ Sock.prototype.adoptWebSocket = function(ws) {
   ws.binaryType = 'arraybuffer';
   s.ws = ws;
   ws.onclose = function(ev) {
-    s.emit('close', ev.code !== 1000 ? new Error('web socket #'+ev.code) : undefined);
+    var err = ws._gotalkCloseError;
+    if (!err && ev.code !== 1000) {
+      err = new Error('web socket #'+ev.code);
+    }
+    s.emit('close', err);
     ws.onmessage = null;
     ws.onerror = null;
     ws.onclose = null;
     s.ws = null;
-  };
-  ws.onerror = function(ev) {
-    s.emit('close', new Error('web socket error'));
   };
   ws.onmessage = function(ev) {
     if (!ws._bufferedMessages) ws._bufferedMessages = [];
@@ -134,7 +135,8 @@ Sock.prototype.startReading = function () {
     var peerVersion = typeof ev.data === 'string' ? txt.parseVersion(ev.data) :
                                                     bin.parseVersion(Buf(ev.data));
     if (peerVersion !== protocol.Version) {
-      ws.close(3000, 'gotalk protocol version mismatch');
+      ws._gotalkCloseError = new Error('unsupported gotalk protocol version');
+      ws.close(4001);
     } else {
       ws.onmessage = readMsg;
     }

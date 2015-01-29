@@ -16,10 +16,8 @@ func recoverAsFail(t *testing.T) {
 
 
 func checkReqHandler(t *testing.T, s *Sock, h *Handlers, name, input, expectedOutput string) {
-  if hv := h.FindRequestHandler(name); hv == nil {
+  if a := h.FindBufferRequestHandler(name); a == nil {
     t.Errorf("handler '%s' not found", name)
-  } else if a, ok := hv.(BufferReqHandler); ok == false {
-    t.Errorf("handler '%s' is not a BufferReqHandler", name)
   } else if outbuf, err := a(s, name, []byte(input)); err != nil {
     t.Errorf("handler '%s' returned an error: %s", name, err.Error())
   } else if bytes.Equal(outbuf, []byte(expectedOutput)) == false {

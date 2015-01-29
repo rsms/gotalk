@@ -8,7 +8,7 @@ import (
 
 const (
   // Version of this protocol
-  ProtocolVersion      = uint8(0)
+  ProtocolVersion      = uint8(1)
 
   // Protocol message types
   MsgTypeSingleReq     = MsgType(byte('r'))
@@ -17,6 +17,7 @@ const (
   MsgTypeSingleRes     = MsgType(byte('R'))
   MsgTypeStreamRes     = MsgType(byte('S'))
   MsgTypeErrorRes      = MsgType(byte('E'))
+  MsgTypeRetryRes      = MsgType(byte('e'))
   MsgTypeNotification  = MsgType(byte('n'))
 )
 
@@ -46,17 +47,22 @@ func ReadVersion(s io.Reader) (uint8, error) {
 }
 
 
-// Create a slice of bytes representing a message (w/o any payload.)
-func MakeMsg(t MsgType, id, name3 string, size int) []byte {
+// Create a slice of bytes representing a message (w/o any payload)
+func MakeMsg(t MsgType, id, name3 string, wait, size int) []byte {
+  // calculate buffer size
   bz := 9  // e.g. "n00000005"
-  if id != "" {
-    if len(id) != 3 { panic("len(id) != 3") }
-    bz += 3  // msg with id e.g. "R00100000005"
-  }
+  name3z := 0
 
-  name3z := len(name3)
-  if name3z != 0 {
-    bz += 3 + name3z  // msg w/ name3 e.g. "r001004echo00000005"
+  if t == MsgTypeRetryRes {
+    bz = 20  // e.g. "e0010000000100000001"
+  } else {
+    if id != "" {
+      bz += 3  // msg with id e.g. "R00100000005"
+    }
+    name3z = len(name3)
+    if name3z != 0 {
+      bz += 3 + name3z  // msg w/ name3 e.g. "r001004echo00000005"
+    }
   }
 
   b := make([]byte, bz)
@@ -77,6 +83,15 @@ func MakeMsg(t MsgType, id, name3 string, size int) []byte {
     z += name3z
   }
 
+  if t == MsgTypeRetryRes {
+    if wait == 0 {
+      copy(b[z:], zeroes[:8])
+    } else {
+      copyFixnum(b[z:z+8], 8, uint64(wait), 16)
+    }
+    z += 8
+  }
+
   if size == 0 {
     copy(b[z:], zeroes[:8])
   } else {
@@ -88,9 +103,10 @@ func MakeMsg(t MsgType, id, name3 string, size int) []byte {
 
 
 // Read a message from `s`
-func ReadMsg(s io.Reader) (t MsgType, id, name3 string, size uint32, err error) {
-  // "r001004echo00000005" => ('r', "001", "echo", 5, nil)
-  // "R00100000005"        => ('R', "001", "", 5, nil)
+func ReadMsg(s io.Reader) (t MsgType, id, name3 string, wait, size uint32, err error) {
+  // "r001004echo00000005"  => ('r', "001", "echo", 0, 5, nil)
+  // "R00100000005"         => ('R', "001", "", 0, 5, nil)
+  // "e0010000138800000014" => ('e', "001", "", 5000, 20, nil)
   for {
     b := make([]byte, 128)
 
@@ -99,15 +115,19 @@ func ReadMsg(s io.Reader) (t MsgType, id, name3 string, size uint32, err error) 
       break
     }
 
+    // type
     t = MsgType(b[0])
     z := 1
 
     if t != MsgTypeNotification {
+      // requestID
       id = string(b[z:z+3])
       z += 3
     }
 
     if t == MsgTypeSingleReq || t == MsgTypeStreamReq || t == MsgTypeNotification {
+      // name
+      // text3Size
       name3z, e := strconv.ParseUint(string(b[z:z+3]), 16, 16)
       z += 3
       if e != nil {
@@ -131,23 +151,38 @@ func ReadMsg(s io.Reader) (t MsgType, id, name3 string, size uint32, err error) 
         }
       }
 
+      // text3Value
       name3 = string(b[z:z+int(name3z)])
       z += int(name3z)
-      b = b[z:]
-    } else {
-      b = b[z:]
+
+    } else if t == MsgTypeRetryRes {
+      // wait
+      n, e := strconv.ParseUint(string(b[z:z+8]), 16, 32)
+      if e != nil {
+        err = e
+        break
+      }
+      wait = uint32(n)
+      z += 8
+
+      // read remainding 8 bytes of the message
+      if err = readn(s, b[12:20]); err != nil {
+        break
+      }
     }
 
-    pz, e := strconv.ParseUint(string(b[:8]), 16, 32)
+    // payloadSize
+    n, e := strconv.ParseUint(string(b[z:z+8]), 16, 32)
     if e != nil {
       err = e
       break
     }
-    size = uint32(pz)
+    size = uint32(n)
+
     break
   }
 
-  return t, id, name3, size, err
+  return t, id, name3, wait, size, err
 }
 
 

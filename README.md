@@ -210,12 +210,15 @@ The request will fail with an error "socket is closed" if the user clicks our bu
 
 The wire format is designed to be human-readable and flexible; it's byte-based and can be efficiently implemented in a number of environments ranging from HTTP and WebSocket in a web browser to raw TCP in Go or C. The protocol provides only a small set of operations on which more elaborate operations can be modeled by the user.
 
+> This document describes protocol version 1
+
 Here's a complete description of the protocol:
 
     conversation    = ProtocolVersion Message*
     message         = SingleRequest | StreamRequest
                     | SingleResult | StreamResult
-                    | ErrorResult
+                    | ErrorResult | RetryResult
+                    | Notification
 
     ProtocolVersion = <hexdigit> <hexdigit>
 
@@ -225,12 +228,14 @@ Here's a complete description of the protocol:
     SingleResult    = "R" requestID payload
     StreamResult    = "S" requestID payload StreamResult*
     ErrorResult     = "E" requestID payload
+    RetryResult     = "e" requestID wait payload
     Notification    = "n" name payload
 
     requestID       = <byte> <byte> <byte>
 
     operation       = text3
     name            = text3
+    wait            = hexUInt8
 
     text3           = text3Size text3Value
     text3Size       = hexUInt3
@@ -244,13 +249,19 @@ Here's a complete description of the protocol:
     hexUInt8        = <hexdigit> <hexdigit> <hexdigit> <hexdigit>
                       <hexdigit> <hexdigit> <hexdigit> <hexdigit>
 
+
+### Handshake
+
 A conversation begins with the protocol version:
 
 ```lua
-00  -- ProtocolVersion 0
+01  -- ProtocolVersion 1
 ```
 
 If the version of the protocol spoken by the other end is not supported by the reader, the connection is terminated and the conversation never starts. Otherwise, any messages are read and/or written.
+
+
+### Single-payload requests and results
 
 This is a "single-payload" request ...
 
@@ -277,7 +288,12 @@ Each request is identified by exactly three bytes—the `requestID`—which is r
 
 These "single" requests & results are the most common protocol messages, and as their names indicates, their payloads follow immediately after the header. For large payloads this can become an issue when dealing with many concurrent requests over a single connection, for which there's a more complicated "streaming" request & result type which we will explore later on.
 
-If an error occurs while handing a request, an "error" is send as the reply instead of a regular result:
+
+### Faults
+
+There are two types of replies indicating a fault: `ErrorResult` for requestor faults and `RetryResult` for responder faults.
+
+If a request is faulty, like missing some required input data or sent over an unauthorized connection, an "error" is send as the reply instead of a regular result:
 
 ```py
 +----------------- ErrorResult
@@ -287,19 +303,36 @@ If an error occurs while handing a request, an "error" is send as the reply inst
 E00100000026{"error":"Unknown operation \"echo\""}
 ```
 
-As with all messages, what the payload data represents is up to each application and not part of the Gotalk protocol although we use JSON in our examples here.
+A request that produces an error should not be retried as-is, similar to the 400-class of errors of the HTTP protocol.
 
-When there's no expectation on a response, Gotalk provides a "notification" message type:
+In the scenario a fault occurs on the responder side, like suffering a temporary internal error or is unable to complete the request because of resource starvation, a RetryResult is sent as the reply to a request:
 
 ```py
-+---------------------- Notification
-|              +--------- name        "chat message"
-|              |       +- payloadSize 46
-|              |       |
-n00cchat message0000002e{"message":"Hi","from":"nthn","room":"gonuts"}
++------------------- RetryResult
+|  +------------------ requestID   "001"
+|  |       +---------- wait        0
+|  |       |       +-- payloadSize 20
+|  |       |       |
+e0010000000000000014"service restarting"
 ```
 
-Notifications are never replied to nor can they cause "error" results.
+In this case — where `wait` is zero — the requestor is free to retry the request at its convenience.
+
+However in some scenarios the responder might require the requestor to wait for some time before retrying the request, in which case the `wait` property has a non-zero value:
+
+```py
++------------------- RetryResult
+|  +------------------ requestID   "001"
+|  |       +---------- wait        5000 ms
+|  |       |       +-- payloadSize 20
+|  |       |       |
+e0010000138800000014"request rate limit"
+```
+
+In this case the requestor must not retry the request until at least 5000 milliseconds has passed.
+
+
+### Streaming requests and results
 
 For more complicated scenarios there are "streaming-payload" requests and results at our disposal. This allows transmitting of large amounts of data without the need for large buffers. For example this could be used to forward audio data to audio playback hardware, or to transmit a large file off of slow media like a tape drive or hard-disk drive.
 
@@ -350,7 +383,40 @@ S0010000000e"Hello World"}
 S00100000000
 ```
 
+Streaming requests occupy resources on the responder's side for the duration of the "stream session". Therefore handling of streaming requests should be limited and "RetryResult" used to throttle requests:
+
+```py
++------------------- RetryResult
+|  +------------------ requestID   "001"
+|  |       +---------- wait        5000 ms
+|  |       |       +-- payloadSize 19
+|  |       |       |
+e0010000138800000013"stream rate limit"
+```
+
+This means that the requestor must not send any new requests until `wait` time has passed.
+
+
+### Notifications
+
+When there's no expectation on a response, Gotalk provides a "notification" message type:
+
+```py
++---------------------- Notification
+|              +--------- name        "chat message"
+|              |       +- payloadSize 46
+|              |       |
+n00cchat message0000002e{"message":"Hi","from":"nthn","room":"gonuts"}
+```
+
+Notifications are never replied to nor can they cause "error" results. Applications needing acknowledgement of notification delivery might consider using a request instead.
+
+
+### Notes
+
 Requests and results does not need to match on the "single" vs "streaming" detail — it's perfectly fine to send a streaming request and read a single response, or send a single response just to receive a streaming result. *The payload type is orthogonal to the message type*, with the exception of an error response which is always a "single-payload" message, carrying any information about the error in its payload. Note however that the current version of the Go package does not provide a high-level API for mixed-kind request-response handling.
+
+For transports which might need "heartbeats" to stay alive, like some raw TCP connections over the internet, the suggested way to implement this is by notifications, e.g. send a "heartbeat" notification at a ceretain interval while no requests are being sent. The Gotalk protocol does not include a "heartbeat" feature because of this reason, as well as the fact that some transports (like web socket) already provide "heartbeat" features.
 
 
 ## Other implementations

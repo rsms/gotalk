@@ -6,11 +6,39 @@ import (
   "log"
   "net"
   "sync"
+  "fmt"
 )
+
+
+type Fault struct {
+  // True if this is a responder fault (protocol: "RetryResult") and the requestor is
+  // allowed to retry the request. False is the fault is a hard error (protocol: "ErrorResult").
+  CanRetry bool
+
+  // When CanRetry is true, this is the number of milliseconds the requestor must wait before
+  // retrying
+  Wait    int
+
+  // Description of the fault
+  Message []byte
+}
+
+// error interface
+func (f *Fault) Error() string {
+  return string(f.Message)
+}
+
+func newErrorFault(m []byte) *Fault {
+  return &Fault{false, 0, m}
+}
+func newRetryFault(wait int, m []byte) *Fault {
+  return &Fault{true, wait, m}
+}
+
+// ----------------------------------------------------------------------------------------------
 
 type pendingResMap  map[string]chan interface{}
 type pendingReqMap  map[string]chan []byte
-
 
 type Sock struct {
   // Handlers associated with this socket
@@ -50,23 +78,31 @@ func NewSock(h *Handlers) *Sock {
 }
 
 
-// Creates two sockets which are connected to eachother
-func Pipe() (*Sock, *Sock, error) {
+// Creates two sockets which are connected to eachother without any resource limits.
+// If `handlers` is nil, DefaultHandlers are used. If `limits` is nil, DefaultLimits are used.
+func Pipe(handlers *Handlers, limits Limits) (*Sock, *Sock, error) {
+  if handlers == nil {
+    handlers = DefaultHandlers
+  }
   c1, c2 := net.Pipe()
-  s1 := NewSock(DefaultHandlers)
-  s2 := NewSock(DefaultHandlers)
+  s1 := NewSock(handlers)
+  s2 := NewSock(handlers)
   s1.Adopt(c1)
   s2.Adopt(c2)
   // Note: We deliberately ignore performing a handshake
-  go s1.Read()
-  go s2.Read()
+  if limits == nil {
+    limits = DefaultLimits
+  }
+  go s1.Read(limits)
+  go s2.Read(limits)
   return s1, s2, nil
 }
 
 
 // Connect to a server via `how` at `addr`. Unless there's an error, the returned socket is
 // already reading in a different goroutine and is ready to be used.
-func Connect(how, addr string) (*Sock, error) {
+// If `limits` is nil, DefaultLimits are used.
+func Connect(how, addr string, limits Limits) (*Sock, error) {
   c, err := net.Dial(how, addr)
   if err != nil {
     return nil, err
@@ -76,7 +112,10 @@ func Connect(how, addr string) (*Sock, error) {
   if err := s.Handshake(); err != nil {
     return nil, err
   }
-  go s.Read()
+  if limits == nil {
+    limits = DefaultLimits
+  }
+  go s.Read(limits)
   return s, nil
 }
 
@@ -111,7 +150,7 @@ func (s *Sock) allocResChan() (string, chan interface{}) {
   id := string(makeFixnumBuf(3, uint64(s.nextOpID), 36))
   s.nextOpID++
   if s.nextOpID == 46656 {
-    // limit for base36 within 3 digits (36^2=46656)
+    // limit for base36 within 3 digits (36^3=46656)
     s.nextOpID = 0
   }
 
@@ -167,14 +206,20 @@ func (s *Sock) deallocReqChan(id string) {
 
 // ----------------------------------------------------------------------------------------------
 
-func (s *Sock) writeMsg(t MsgType, id, op string, buf []byte) error {
+func (s *Sock) writeMsg(t MsgType, id, op string, wait int, buf []byte) error {
+  if s.conn == nil {
+    panic("not connected")
+  }
   s.wmu.Lock()
   defer s.wmu.Unlock()
-  if _, err := s.conn.Write(MakeMsg(t, id, op, len(buf))); err != nil {
+  if _, err := s.conn.Write(MakeMsg(t, id, op, wait, len(buf))); err != nil {
     return err
   }
-  _, err := s.conn.Write(buf)
-  return err
+  if len(buf) != 0 {
+    _, err := s.conn.Write(buf)
+    return err
+  }
+  return nil
 }
 
 
@@ -183,14 +228,14 @@ type reqHandlerType int
 
 
 // Send a single-buffer request
-func (s *Sock) BufferRequest(op string, buf []byte) ([]byte, error) {
+func (s *Sock) BufferRequest(op string, buf []byte) ([]byte, *Fault) {
   id, ch := s.allocResChan()
   defer s.deallocResChan(id)
 
   //fmt.Printf("BufferRequest: writeMsg(%v, %v, %v)\n", id, op, buf)
 
-  if err := s.writeMsg(MsgTypeSingleReq, id, op, buf); err != nil {
-    return nil, err
+  if err := s.writeMsg(MsgTypeSingleReq, id, op, 0, buf); err != nil {
+    return nil, newErrorFault([]byte(err.Error()))
   }
 
   // Wait for response to be read in readLoop
@@ -203,28 +248,31 @@ func (s *Sock) BufferRequest(op string, buf []byte) ([]byte, error) {
     if resbuf.t == MsgTypeSingleRes {
       return resbuf.b, nil
     } else if resbuf.t == MsgTypeErrorRes {
-      return nil, errors.New(string(resbuf.b))
-      // TODO: return an error type which contains the buffer, because the buffer might not be
-      // a string.
+      return nil, newErrorFault(resbuf.b)
+    } else if resbuf.t == MsgTypeRetryRes {
+      return nil, newRetryFault(resbuf.wait, resbuf.b)
     }
-    // Note: This particular function requires the response to be buffered and not streaming
-    return resbuf.b, errors.New("unexpected message "+string(byte(resbuf.t)))
+    // Note: We require the response to be buffered and not streaming
+    return resbuf.b, newErrorFault([]byte("unexpected message "+string(byte(resbuf.t))))
   }
   return nil, nil
 }
 
 
 // Send a single-value request where the input and output values are JSON-encoded
-func (s *Sock) Request(op string, in interface{}, out interface{}) error {
+func (s *Sock) Request(op string, in interface{}, out interface{}) *Fault {
   inbuf, err := json.Marshal(in)
   if err != nil {
-    return err
+    return newErrorFault([]byte(err.Error()))
   }
-  outbuf, err := s.BufferRequest(op, inbuf)
-  if err != nil {
-    return err
+  outbuf, fault := s.BufferRequest(op, inbuf)
+  if fault != nil {
+    return fault
   }
-  return json.Unmarshal(outbuf, out)
+  if err := json.Unmarshal(outbuf, out); err != nil {
+    return newErrorFault([]byte(err.Error()))
+  }
+  return nil
 }
 
 
@@ -236,7 +284,7 @@ func (s *Sock) StreamRequest(op string) *StreamRequest {
 
 // Send a single-buffer notification
 func (s *Sock) BufferNotify(t string, buf []byte) error {
-  return s.writeMsg(MsgTypeNotification, "", t, buf)
+  return s.writeMsg(MsgTypeNotification, "", t, 0, buf)
 }
 
 // Send a single-value request where the value is JSON-encoded
@@ -270,12 +318,12 @@ func (r *StreamRequest) Write(b []byte) error {
   if r.started == false {
     r.started = true
     r.id, r.ch = r.sock.allocResChan()
-    if err := r.sock.writeMsg(MsgTypeStreamReq, r.id, r.op, b); err != nil {
+    if err := r.sock.writeMsg(MsgTypeStreamReq, r.id, r.op, 0, b); err != nil {
       r.finalize()
       return err
     }
   } else {
-    if err := r.sock.writeMsg(MsgTypeStreamReqPart, r.id, "", b); err != nil {
+    if err := r.sock.writeMsg(MsgTypeStreamReqPart, r.id, "", 0, b); err != nil {
       r.finalize()
       return err
     }
@@ -284,7 +332,7 @@ func (r *StreamRequest) Write(b []byte) error {
 }
 
 func (r *StreamRequest) End() error {
-  err := r.sock.writeMsg(MsgTypeStreamReqPart, r.id, "", nil)
+  err := r.sock.writeMsg(MsgTypeStreamReqPart, r.id, "", 0, nil)
   if err != nil {
     r.finalize()
   }
@@ -325,66 +373,62 @@ func (s *Sock) readDiscard(readz int) error {
 }
 
 
-func (s *Sock) respondErr(readz int, id, errmsg string) error {
+func (s *Sock) respondError(readz int, id, msg string) error {
   if err := s.readDiscard(readz); err != nil {
     return err
   }
-  s.wmu.Lock()
-  defer s.wmu.Unlock()
-  if _, err := s.conn.Write(MakeMsg(MsgTypeErrorRes, id, "", len(errmsg))); err != nil {
-    return err
-  }
-  _, err := s.conn.Write([]byte(errmsg))
-  return err
+  return s.writeMsg(MsgTypeErrorRes, id, "", 0, []byte(msg))
 }
 
 
-func (s *Sock) respondOK(id string, outbuf []byte) error {
-  s.wmu.Lock()
-  defer s.wmu.Unlock()
-  if _, err := s.conn.Write(MakeMsg(MsgTypeSingleRes, id, "", len(outbuf))); err != nil {
+func (s *Sock) respondRetry(readz int, id string, wait int, msg string) error {
+  if err := s.readDiscard(readz); err != nil {
     return err
   }
-  if len(outbuf) != 0 {
-    _, err := s.conn.Write(outbuf)
-    return err
-  }
-  return nil
+  return s.writeMsg(MsgTypeRetryRes, id, "", wait, []byte(msg))
 }
 
 
-func (s *Sock) findHandlerOrResErr(id, op string, size int) interface{} {
-  handler := s.Handlers.FindRequestHandler(op)
+func (s *Sock) respondOK(id string, b []byte) error {
+  return s.writeMsg(MsgTypeSingleRes, id, "", 0, b)
+}
+
+
+func (s *Sock) readBufferReq(limits Limits, id, op string, size int) error {
+  if limits.incBufferReq() == false {
+    return s.respondRetry(size, id, limitWaitBufferReq(), "request rate limit")
+  }
+
+  handler := s.Handlers.FindBufferRequestHandler(op)
   if handler == nil {
-    if err := s.respondErr(size, id, "unknown operation \""+op+"\""); err != nil {
-      panic("failed to send error")
-    }
-  }
-  return handler
-}
-
-
-func (s *Sock) readSingleReq(id, op string, size int) error {
-  handlerval := s.findHandlerOrResErr(id, op, size)
-  if handlerval == nil {
-    return nil
+    err := s.respondError(size, id, "unknown operation \""+op+"\"")
+    limits.decBufferReq()
+    return err
   }
 
-  handler, ok := handlerval.(BufferReqHandler)
-  if ok == false {
-    return s.respondErr(size, id, "buffered request not supported")
-  }
-
-  // Buffered handler
   inbuf := make([]byte, size)
   if err := readn(s.conn, inbuf); err != nil {
+    limits.decBufferReq()
     return err
   }
+
   // Dispatch handler
   go func() {
+    defer func() {
+      if r := recover(); r != nil {
+        if s.conn != nil {
+          if err := s.respondError(0, id, fmt.Sprint(r)); err != nil {
+            log.Println(err)
+            s.Close()
+          }
+        }
+      }
+      limits.decBufferReq()
+    }()
     outbuf, err := handler(s, op, inbuf)
     if err != nil {
-      if err := s.respondErr(0, id, err.Error()); err != nil {
+      log.Println(err)
+      if err := s.respondError(0, id, err.Error()); err != nil {
         log.Println(err)
         s.Close()
       }
@@ -400,28 +444,26 @@ func (s *Sock) readSingleReq(id, op string, size int) error {
 }
 
 
-func (s *Sock) readStreamReq(id, op string, size int) error {
-  if len(s.pendingReq) >= s.StreamReqLimit {
-    if s.StreamReqLimit == 0 {
-      return s.respondErr(size, id, "stream request not supported")
+func (s *Sock) readStreamReq(limits Limits, id, op string, size int) error {
+  if limits.incStreamReq() == false {
+    if limits.streamReqEnabled() {
+      return s.respondRetry(size, id, limitWaitStreamReq(), "request rate limit")
     } else {
-      return s.respondErr(size, id, "stream request limit")
+      return s.respondError(size, id, "stream requests not supported")
     }
   }
 
-  handlerval := s.findHandlerOrResErr(id, op, size)
-  if handlerval == nil {
-    return nil
-  }
-
-  handler, ok := handlerval.(StreamReqHandler)
-  if ok == false {
-    return s.respondErr(size, id, "streaming request not supported")
+  handler := s.Handlers.FindStreamRequestHandler(op)
+  if handler == nil {
+    err := s.respondError(size, id, "unknown operation \""+op+"\"")
+    limits.decStreamReq()
+    return err
   }
 
   // Read first buff
   inbuf := make([]byte, size)
   if err := readn(s.conn, inbuf); err != nil {
+    limits.decStreamReq()
     return err
   }
 
@@ -435,58 +477,62 @@ func (s *Sock) readStreamReq(id, op string, size int) error {
     if len(b) == 0 {
       wroteEOS = true
     }
-    return s.writeMsg(MsgTypeStreamRes, id, "", b)
+    return s.writeMsg(MsgTypeStreamRes, id, "", 0, b)
   }
 
   // Dispatch handler
   go func () {
+    // TODO: recover?
     if err := handler(s, op, rch, writer); err != nil {
       s.deallocReqChan(id)
-      if err := s.respondErr(0, id, err.Error()); err != nil {
+      if err := s.respondError(0, id, err.Error()); err != nil {
         log.Println(err)
         s.Close()
       }
     }
     if wroteEOS == false {
       // automatically writing EOS unless it was written by handler
-      if err := s.writeMsg(MsgTypeStreamRes, id, "", nil); err != nil {
+      if err := s.writeMsg(MsgTypeStreamRes, id, "", 0, nil); err != nil {
         log.Println(err)
         s.Close()
       }
     }
+    limits.decStreamReq()
   }()
 
   return nil
 }
 
 
-func (s *Sock) readStreamReqPart(id string, size int) error {
+func (s *Sock) readStreamReqPart(limits Limits, id string, size int) error {
+  rch := s.getReqChan(id)
+  if rch == nil {
+    return errors.New("illegal message")  // There was no "start stream" message
+  }
+
   var b []byte = nil
 
   if size != 0 {
     b = make([]byte, size)
     if err := readn(s.conn, b); err != nil {
+      limits.decStreamReq()
       return err
     }
   }
 
-  if rch := s.getReqChan(id); rch != nil {
-    rch <- b
-  } else if s.StreamReqLimit == 0 {
-    return errors.New("illegal message")  // There was no "start stream" message
-  } // else: ignore msg
-
+  rch <- b
   return nil
 }
 
 // -----------------------------------------------------------------------------------------------
 
 type resbuffer struct {
-  t MsgType
-  b []byte
+  t    MsgType
+  wait int
+  b    []byte
 }
 
-func (s *Sock) readRes(t MsgType, id string, size int) error {
+func (s *Sock) readRes(t MsgType, id string, wait, size int) error {
   ch := s.getResChan(id)
 
   if ch == nil {
@@ -507,7 +553,7 @@ func (s *Sock) readRes(t MsgType, id string, size int) error {
           return err
         }
       }
-      ch <- resbuffer{t, buf}
+      ch <- resbuffer{t, wait, buf}
 
     default:
       panic("unexpected req handler type")
@@ -560,15 +606,7 @@ func (s *Sock) Handshake() error {
 
 // After completing a succesful handshake, call this function to read messages received to this
 // socket. Does not return until the socket is closed.
-func (s *Sock) Read() error {
-  defer func() {
-    // recover from a faulty readLoop by closing the connection
-    if r := recover(); r != nil {
-      log.Println("gotalk.Sock panic:", r)
-      s.Close()
-    }
-  }()
-
+func (s *Sock) Read(limits Limits) error {
   for {
 
     // debug: read a chunk and print it
@@ -581,7 +619,7 @@ func (s *Sock) Read() error {
     // continue
 
     // Read next message
-    t, id, name, size, err := ReadMsg(s.conn)
+    t, id, name, wait, size, err := ReadMsg(s.conn)
     if err != nil {
       s.Close()
       return err
@@ -591,16 +629,16 @@ func (s *Sock) Read() error {
 
     switch t {
       case MsgTypeSingleReq:
-        err = s.readSingleReq(id, name, int(size))
+        err = s.readBufferReq(limits, id, name, int(size))
 
       case MsgTypeStreamReq:
-        err = s.readStreamReq(id, name, int(size))
+        err = s.readStreamReq(limits, id, name, int(size))
 
       case MsgTypeStreamReqPart:
-        err = s.readStreamReqPart(id, int(size))
+        err = s.readStreamReqPart(limits, id, int(size))
 
-      case MsgTypeSingleRes, MsgTypeStreamRes, MsgTypeErrorRes:
-        err = s.readRes(t, id, int(size))
+      case MsgTypeSingleRes, MsgTypeStreamRes, MsgTypeErrorRes, MsgTypeRetryRes:
+        err = s.readRes(t, id, int(wait), int(size))
 
       case MsgTypeNotification:
         err = s.readNotification(name, int(size))

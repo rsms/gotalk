@@ -4,8 +4,9 @@ import (
   "golang.org/x/net/websocket"
 )
 
-// Handler that can be used with the http package
-func WebSocketHandler(h *Handlers, handler SockHandler) websocket.Handler {
+// Handler that can be used with the http package.
+// If `limits` is nil, DefaultLimits are used.
+func WebSocketHandler(h *Handlers, limits Limits, handler SockHandler) websocket.Handler {
   if h == nil {
     h = DefaultHandlers
   }
@@ -20,7 +21,10 @@ func WebSocketHandler(h *Handlers, handler SockHandler) websocket.Handler {
         if handler != nil {
           handler(s)
         }
-        s.Read()
+        if limits == nil {
+          limits = DefaultLimits
+        }
+        s.Read(limits)
       }
     })
 }

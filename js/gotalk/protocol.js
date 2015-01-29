@@ -3,7 +3,7 @@ var Buf = require('./buf');
 var utf8 = require('./utf8');
 
 // Version of this protocol
-exports.Version = 0;
+exports.Version = 1;
 
 // Message types
 var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     'r'.charCodeAt(0),
@@ -12,6 +12,7 @@ var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     'r'.charCodeAt(0),
     MsgTypeSingleRes     = exports.MsgTypeSingleRes =     'R'.charCodeAt(0),
     MsgTypeStreamRes     = exports.MsgTypeStreamRes =     'S'.charCodeAt(0),
     MsgTypeErrorRes      = exports.MsgTypeErrorRes =      'E'.charCodeAt(0),
+    MsgTypeRetryRes      = exports.MsgTypeRetryRes =      'e'.charCodeAt(0),
     MsgTypeNotification  = exports.MsgTypeNotification =  'n'.charCodeAt(0);
 
 // ==============================================================================================

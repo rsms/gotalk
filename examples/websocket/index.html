@@ -75,48 +75,44 @@ gotalk.handle('greet', function (params, result) {
 var url = 'ws://'+document.location.host+'/gotalk';
 log('connecting to', url);
 
-gotalk.connect(url, function (err, s) {
+var s = gotalk.connect(url, function (err, s) {
   if (err) return log('failed to connect:', err);
   log('socket opened');
-
-  s.on('close', function(){
-    log('socket closed');
-  });
-
-  s.on('notification', function (name, value) {
-    log('received notification "'+name+'":', value);
-  });
-
-  // Allow sending requests from the UI
-  document.querySelector('form.sendreq-greet').onsubmit = function(ev) {
-    var name = this.querySelector('input[type=text]').value;
-    log('send request "greet" with params:', {name:name});
-    s.request('greet', {name:name}, function (err, result) {
-      if (err) return log('request for "greet" failed:', err);
-      log('received "greet" result:', result);
-    });
-    return false;
-  };
-
-  document.querySelector('form.sendreq-echo').onsubmit = function(ev) {
-    var value = this.querySelector('input[type=text]').value;
-    log('send request "echó" with value:', value);
-    s.bufferRequest('echó', value, function (err, result) {
-      if (err) return log('request for "echó" failed:', err);
-      log('received "echó" result:', result);
-    });
-    return false;
-  };
-
-  // Allow closing socket from UI
-  document.querySelector('form.closesock').onsubmit = function(ev) {
-    log("closing socket");
-    s.end();
-    return false;
-  };
-
-  // s.end();
+}).on('close', function (err) {
+  log('socket closed (code ',err,')');
+}).on('notification', function (n, v) {
+  log('received notification "'+name+'":', value);
 });
+
+
+// Allow sending requests from the UI
+document.querySelector('form.sendreq-greet').onsubmit = function(ev) {
+  var name = this.querySelector('input[type=text]').value;
+  log('send request "greet" with params:', {name:name});
+  s.request('greet', {name:name}, function (err, result) {
+    if (err) return log('request for "greet" failed:', err);
+    log('received "greet" result:', result);
+  });
+  return false;
+};
+
+document.querySelector('form.sendreq-echo').onsubmit = function(ev) {
+  var value = this.querySelector('input[type=text]').value;
+  log('send request "echó" with value:', value);
+  s.bufferRequest('echó', value, function (err, result) {
+    if (err) return log('request for "echó" failed:', err);
+    log('received "echó" result:', result);
+  });
+  return false;
+};
+
+// Allow closing socket from UI
+document.querySelector('form.closesock').onsubmit = function(ev) {
+  log("closing socket");
+  s.end();
+  return false;
+};
+
 
 </script>
   </body>

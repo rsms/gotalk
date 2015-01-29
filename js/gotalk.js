@@ -16,15 +16,15 @@ EventEmitter.prototype.addListener = function (type, listener) {
   if (!this.__events) {
     Object.defineProperty(this, '__events', {value:{}, enumerable:false, writable:true});
     this.__events[type] = [listener];
-    return 1;
+    return this;
   }
   var listeners = this.__events[type];
   if (listeners === undefined) {
     this.__events[type] = [listener];
-    return 1;
+    return this;
   }
   listeners.push(listener);
-  return listeners.length;
+  return this;
 };
 
 EventEmitter.prototype.on = EventEmitter.prototype.addListener;
@@ -52,7 +52,7 @@ EventEmitter.prototype.removeListener = function (type, listener) {
     }
     return listeners.length;
   }
-  return 0;
+  return this;
 };
 
 EventEmitter.prototype.removeAllListeners = function (type) {
@@ -153,7 +153,7 @@ var Buf = require('./buf');
 var utf8 = require('./utf8');
 
 // Version of this protocol
-exports.Version = 0;
+exports.Version = 1;
 
 // Message types
 var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     'r'.charCodeAt(0),
@@ -162,6 +162,7 @@ var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     'r'.charCodeAt(0),
     MsgTypeSingleRes     = exports.MsgTypeSingleRes =     'R'.charCodeAt(0),
     MsgTypeStreamRes     = exports.MsgTypeStreamRes =     'S'.charCodeAt(0),
     MsgTypeErrorRes      = exports.MsgTypeErrorRes =      'E'.charCodeAt(0),
+    MsgTypeRetryRes      = exports.MsgTypeRetryRes =      'e'.charCodeAt(0),
     MsgTypeNotification  = exports.MsgTypeNotification =  'n'.charCodeAt(0);
 
 // ==============================================================================================
@@ -482,14 +483,15 @@ Sock.prototype.adoptWebSocket = function(ws) {
   ws.binaryType = 'arraybuffer';
   s.ws = ws;
   ws.onclose = function(ev) {
-    s.emit('close', ev.code !== 1000 ? new Error('web socket #'+ev.code) : undefined);
+    var err = ws._gotalkCloseError;
+    if (!err && ev.code !== 1000) {
+      err = new Error('web socket #'+ev.code);
+    }
+    s.emit('close', err);
     ws.onmessage = null;
     ws.onerror = null;
     ws.onclose = null;
     s.ws = null;
-  };
-  ws.onerror = function(ev) {
-    s.emit('close', new Error('web socket error'));
   };
   ws.onmessage = function(ev) {
     if (!ws._bufferedMessages) ws._bufferedMessages = [];
@@ -563,7 +565,8 @@ Sock.prototype.startReading = function () {
     var peerVersion = typeof ev.data === 'string' ? txt.parseVersion(ev.data) :
                                                     bin.parseVersion(Buf(ev.data));
     if (peerVersion !== protocol.Version) {
-      ws.close(3000, 'gotalk protocol version mismatch');
+      ws._gotalkCloseError = new Error('unsupported gotalk protocol version');
+      ws.close(4001);
     } else {
       ws.onmessage = readMsg;
     }

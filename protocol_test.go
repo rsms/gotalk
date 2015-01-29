@@ -12,14 +12,15 @@ func assertMsgEqual(t *testing.T, msg []byte, expect []byte) {
 
 
 func TestMakeMsg(t *testing.T) {
-  assertMsgEqual(t, MakeMsg(MsgTypeSingleReq, "abc", "echo", 0),  []byte("rabc004echo00000000"))
-  assertMsgEqual(t, MakeMsg(MsgTypeSingleReq, "abc", "echo", 3),  []byte("rabc004echo00000003"))
-  assertMsgEqual(t, MakeMsg(MsgTypeStreamReq, "abc", "echo", 3),  []byte("sabc004echo00000003"))
-  assertMsgEqual(t, MakeMsg(MsgTypeStreamReqPart, "abc", "", 3),  []byte("pabc00000003"))
-  assertMsgEqual(t, MakeMsg(MsgTypeSingleRes, "abc", "", 3),      []byte("Rabc00000003"))
-  assertMsgEqual(t, MakeMsg(MsgTypeStreamRes, "abc", "", 3),      []byte("Sabc00000003"))
-  assertMsgEqual(t, MakeMsg(MsgTypeErrorRes, "abc", "", 3),       []byte("Eabc00000003"))
-  assertMsgEqual(t, MakeMsg(MsgTypeNotification, "", "hello", 3), []byte("n005hello00000003"))
+  assertMsgEqual(t, MakeMsg(MsgTypeSingleReq, "abc", "echo", 0, 0),  []byte("rabc004echo00000000"))
+  assertMsgEqual(t, MakeMsg(MsgTypeSingleReq, "abc", "echo", 0, 3),  []byte("rabc004echo00000003"))
+  assertMsgEqual(t, MakeMsg(MsgTypeStreamReq, "abc", "echo", 0, 3),  []byte("sabc004echo00000003"))
+  assertMsgEqual(t, MakeMsg(MsgTypeStreamReqPart, "abc", "", 0, 3),  []byte("pabc00000003"))
+  assertMsgEqual(t, MakeMsg(MsgTypeSingleRes, "abc", "", 0, 3),      []byte("Rabc00000003"))
+  assertMsgEqual(t, MakeMsg(MsgTypeStreamRes, "abc", "", 0, 3),      []byte("Sabc00000003"))
+  assertMsgEqual(t, MakeMsg(MsgTypeErrorRes, "abc", "", 0, 3),       []byte("Eabc00000003"))
+  assertMsgEqual(t, MakeMsg(MsgTypeRetryRes, "abc", "", 6, 3),       []byte("eabc0000000600000003"))
+  assertMsgEqual(t, MakeMsg(MsgTypeNotification, "", "hello", 0, 3), []byte("n005hello00000003"))
 }
 
 
@@ -32,8 +33,8 @@ func TestWriteReadVersion(t *testing.T) {
     t.Errorf("WriteVersion() => (%v, _), expected (2, _)", n)
   }
 
-  if ProtocolVersion != 0 { t.Errorf("ProtocolVersion = %v, expected 0", ProtocolVersion) }
-  if s.String() != "00" { t.Errorf("s.String() = %s, expected \"00\"", s.String()) }
+  if ProtocolVersion != 1 { t.Errorf("ProtocolVersion = %v, expected 1", ProtocolVersion) }
+  if s.String() != "01" { t.Errorf("s.String() = %s, expected \"01\"", s.String()) }
 
   if u, err := ReadVersion(s); err != nil {
     t.Errorf("ReadVersion() failed: %v", err.Error())
@@ -44,16 +45,16 @@ func TestWriteReadVersion(t *testing.T) {
 
 
 type testMsg struct {
-  t        MsgType
-  id, name string
-  size     int
+  t          MsgType
+  id, name   string
+  wait, size int
 }
 
 const kPayloadByte = byte('~')
 
 
 func assertWriteMsg(t *testing.T, s *bytes.Buffer, m *testMsg) {
-  msg := MakeMsg(m.t, m.id, m.name, m.size)
+  msg := MakeMsg(m.t, m.id, m.name, m.wait, m.size)
   if _, err := s.Write(msg); err != nil {
     t.Errorf("s.Write() failed: %v", err.Error())
   }
@@ -65,11 +66,12 @@ func assertWriteMsg(t *testing.T, s *bytes.Buffer, m *testMsg) {
 
 
 func assertReadMsg(t *testing.T, s *bytes.Buffer, m *testMsg) {
-  ty, id, name, size, err := ReadMsg(s)
+  ty, id, name, wait, size, err := ReadMsg(s)
   if err       != nil {    t.Errorf("ReadMsg() failed: %v", err.Error()) }
   if ty        != m.t {    t.Errorf("ReadMsg() ty = \"%v\", expected \"%v\"", ty, m.t) }
   if id        != m.id {   t.Errorf("ReadMsg() id = \"%v\", expected \"%v\"", id, m.id) }
   if name      != m.name { t.Errorf("ReadMsg() name = \"%v\", expected \"%v\"", name, m.name) }
+  if int(wait) != m.wait { t.Errorf("ReadMsg() wait = %v, expected %v", wait, m.wait) }
   if int(size) != m.size { t.Errorf("ReadMsg() size = %v, expected %v", size, m.size) }
   for i := 0; i != m.size; i++ {
     if b, err := s.ReadByte(); err != nil {
@@ -92,17 +94,18 @@ func TestWriteReadMsg(t *testing.T) {
 
   // Make sure ReadMsg behaves correctly for an (invalid) empty notification
   s.Write([]byte("n00000000000"))
-  assertReadMsg(t,s, &testMsg{MsgTypeNotification, "", "", 0})
+  assertReadMsg(t,s, &testMsg{MsgTypeNotification, "", "", 0, 0})
 
   m := []*testMsg{
-    &testMsg{MsgTypeSingleReq,     "abc", "echo",    0},
-    &testMsg{MsgTypeSingleReq,     "zzz", "lolcats", 3},
-    &testMsg{MsgTypeStreamReq,     "abc", "echo",    4},
-    &testMsg{MsgTypeStreamReqPart, "abc", "",        5},
-    &testMsg{MsgTypeSingleRes,     "abc", "",        6},
-    &testMsg{MsgTypeStreamRes,     "abc", "",        7},
-    &testMsg{MsgTypeErrorRes,      "abc", "",        8},
-    &testMsg{MsgTypeNotification,  "",    "hello",   9},
+    &testMsg{MsgTypeSingleReq,     "abc", "echo",    0, 0},
+    &testMsg{MsgTypeSingleReq,     "zzz", "lolcats", 0, 3},
+    &testMsg{MsgTypeStreamReq,     "abc", "echo",    0, 4},
+    &testMsg{MsgTypeStreamReqPart, "abc", "",        0, 5},
+    &testMsg{MsgTypeSingleRes,     "abc", "",        0, 6},
+    &testMsg{MsgTypeStreamRes,     "abc", "",        0, 7},
+    &testMsg{MsgTypeErrorRes,      "abc", "",        0, 8},
+    &testMsg{MsgTypeRetryRes,      "abc", "",        6, 8},
+    &testMsg{MsgTypeNotification,  "",    "hello",   0, 9},
   }
 
   // Serially (read, write, read, write, ...)
