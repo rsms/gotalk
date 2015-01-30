@@ -257,7 +257,7 @@ This is a "single-payload" request ...
 ```py
 +----------------- SingleRequest
 |  +---------------- requestID   "001"
-|  |      +--------- operation   "echo"
+|  |      +--------- operation   004 bytes, value "echo"
 |  |      |       +- payloadSize 25
 |  |      |       |
 r001004echo00000019{"message":"Hello World"}
