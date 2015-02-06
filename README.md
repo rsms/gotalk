@@ -249,7 +249,7 @@ Here's a complete description of the protocol:
     message         = SingleRequest | StreamRequest
                     | SingleResult | StreamResult
                     | ErrorResult | RetryResult
-                    | Notification
+                    | Notification | ProtocolError
 
     ProtocolVersion = <hexdigit> <hexdigit>
 
@@ -261,12 +261,14 @@ Here's a complete description of the protocol:
     ErrorResult     = "E" requestID payload
     RetryResult     = "e" requestID wait payload
     Notification    = "n" name payload
+    ProtocolError   = "f" code
 
     requestID       = <byte> <byte> <byte> <byte>
 
     operation       = text3
     name            = text3
     wait            = hexUInt8
+    code            = hexUInt8
 
     text3           = text3Size text3Value
     text3Size       = hexUInt3
@@ -289,7 +291,7 @@ A conversation begins with the protocol version:
 01  -- ProtocolVersion 1
 ```
 
-If the version of the protocol spoken by the other end is not supported by the reader, the connection is terminated and the conversation never starts. Otherwise, any messages are read and/or written.
+If the version of the protocol spoken by the other end is not supported by the reader, a ProtocolError message is sent with code 1 and the connection is terminated. Otherwise, any messages are read and/or written.
 
 
 ### Single-payload requests and results
@@ -299,7 +301,7 @@ This is a "single-payload" request ...
 ```py
 +------------------ SingleRequest
 |   +---------------- requestID   "0001"
-|   |      +--------- operation   "echo"
+|   |      +--------- operation   "echo" (text3Size 4, text3Value "echo")
 |   |      |       +- payloadSize 25
 |   |      |       |
 r0001004echo00000019{"message":"Hello World"}
@@ -362,6 +364,23 @@ e00010000138800000014"request rate limit"
 
 In this case the requestor must not retry the request until at least 5000 milliseconds has passed.
 
+If the protocol communication itself experiences issues—e.g. an illegal message is received—a ProtocolError is written and the connection is closed.
+
+**ProtocolError codes:**
+
+|  Code | Meaning          |
+| ----: | ---------------- |
+|     1 | Unsupported      |
+|     2 | Invalid message  |
+
+Example of a peer which does not support the version of the protocol spoken by the sender:
+
+```py
++-------- ProtocolError
+|       +-- code 1
+|       |
+f00000001
+```
 
 ### Streaming requests and results
 
@@ -374,7 +393,7 @@ Here's an example of a "streaming-payload" request ...
 ```py
 +------------------ StreamRequest
 |   +---------------- requestID   "0001"
-|   |      +--------- operation   "echo"
+|   |      +--------- operation   "echo" (text3Size 4, text3Value "echo")
 |   |      |       +- payloadSize 11
 |   |      |       |
 s0001004echo0000000b{"message":
@@ -434,7 +453,7 @@ When there's no expectation on a response, Gotalk provides a "notification" mess
 
 ```py
 +---------------------- Notification
-|              +--------- name        "chat message"
+|              +--------- name        "chat message" (text3Size 12, text3Value "chat message")
 |              |       +- payloadSize 46
 |              |       |
 n00cchat message0000002e{"message":"Hi","from":"nthn","room":"gonuts"}
@@ -448,6 +467,7 @@ Notifications are never replied to nor can they cause "error" results. Applicati
 Requests and results does not need to match on the "single" vs "streaming" detail — it's perfectly fine to send a streaming request and read a single response, or send a single response just to receive a streaming result. *The payload type is orthogonal to the message type*, with the exception of an error response which is always a "single-payload" message, carrying any information about the error in its payload. Note however that the current version of the Go package does not provide a high-level API for mixed-kind request-response handling.
 
 For transports which might need "heartbeats" to stay alive, like some raw TCP connections over the internet, the suggested way to implement this is by notifications, e.g. send a "heartbeat" notification at a ceretain interval while no requests are being sent. The Gotalk protocol does not include a "heartbeat" feature because of this reason, as well as the fact that some transports (like web socket) already provide "heartbeat" features.
+
 
 
 ## Other implementations

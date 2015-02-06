@@ -1,5 +1,6 @@
 "use strict";
 var fs = require('fs');
+var crypto = require('crypto');
 
 var srcDir = __dirname + '/gotalk';
 var browserFile = __dirname + '/browser/browser.js';
@@ -26,14 +27,14 @@ function buildAll() {
     var moduleName = filename.replace(/\.[^\.]+$/, '');
     var fileContents = fs.readFileSync(srcDir + '/' + filename, 'utf8');
     if (filename === 'index.js') {
-      return '(function(module, exports) {\n' +
+      return '__main=function(module) { var exports = module.exports;\n' +
         fileContents +
-        '\n})(__main, __main.exports);\n' +
+        '\n};\n' +
         ''
     } else {
-      return '(function(module) { var exports = module.exports;\n' +
+      return '__mod["'+moduleName+'"]=function(module) { var exports = module.exports;\n' +
         fileContents +
-        '\n})(modules["'+moduleName+'"]);\n';
+        '\n};\n';
     }
   });
 
@@ -51,7 +52,82 @@ function buildAll() {
   });
 
   fs.writeFileSync(__dirname + '/gotalk.js', source);
-  console.log('Built gotalk.js ('+source.length+' bytes)');
+
+  var srcbuf = new Buffer(source, 'utf8');
+  // console.log(srcbuf.toString('hex'))
+
+  var srcsha1 = crypto.createHash('sha1');
+  srcsha1.update(srcbuf);
+  var sha1buf = srcsha1.digest();
+
+  var goSource =
+    'package gotalkjs\n'+
+    'const BrowserLibSizeString = "'+srcbuf.length.toString(10)+'"\n'+
+    // 'const BrowserLibSHA1Raw    = '+bufToByteStr(sha1buf, '"')+'\n'+
+    'const BrowserLibSHA1Base64 = "'+sha1buf.toString('base64')+'"\n'+
+    'const BrowserLibETag = "\\\"'+sha1buf.toString('base64')+'\\\""\n'+
+    'const BrowserLibString = '+bufToByteStr(srcbuf, '"', true)+'\n'+
+    //'var BrowserLibBytes        = [...]byte{\n  '
+    '';
+  // var hex2v = srcbuf.toString('hex');
+  // for (var c, n = 0, i = 0, L = srcbuf.length; i !== L; ++i) {
+  //   c = srcbuf[i];
+  //   if (n++ === 20) {
+  //     n = 0;
+  //     goSource += "\n  ";
+  //   }
+  //   if (c === 0x0a) {
+  //     goSource += "'\\n',";
+  //   } else if (c === 0x27) {
+  //     goSource += "'\\'',";
+  //   } else if (c === 0x5c) {
+  //     goSource += "'\\\\',";
+  //   } else if (c >= 0x20 && c < 0x7f) {
+  //     goSource += "'"+String.fromCharCode(c)+"',"
+  //   } else {
+  //     goSource += c.toString(10) + ',';
+  //   }
+  // }
+  // goSource += '\n}\n';
+  fs.writeFileSync(__dirname + '/gotalk.js.go', goSource);
+
+  console.log('Built js/gotalk.js ('+source.length+' bytes) and wrote js/gotalk.js.go');
+}
+
+
+var map = {
+  0x09: "\\t",
+  0x0a: "\\n",
+  0x0d: "\\r",
+  0x5c: "\\\\",
+};
+
+function strEscByte(c, enclosedByByte, enclosedByChar) {
+  var r = map[c];
+  if (r !== undefined) {
+    return r;
+  }
+  if (c === enclosedByByte) {
+    return "\\" + enclosedByChar;
+  } else if (c >= 0x20 && c < 0x7f) {
+    return String.fromCharCode(c);
+  } else {
+    return (c <= 0xf ? '\\x0' : '\\x')+c.toString(16);
+  }
+}
+
+function bufToByteStr(buf, enclosedByChar, breakUpLines) {
+  var enclosedByByte = enclosedByChar.charCodeAt(0);
+  var s = (breakUpLines ? enclosedByChar+enclosedByChar+'+\n  ' : '') + enclosedByChar;
+  for (var c, i = 0, L = buf.length; i !== L; ++i) {
+    c = buf[i];
+    if (c === 0x0a && breakUpLines) {
+      s += '\\n'+enclosedByChar+'+\n  '+enclosedByChar
+    } else {
+      s += strEscByte(c, enclosedByByte, enclosedByChar);
+    }
+  }
+  return s + enclosedByChar;
 }
 
 

@@ -124,7 +124,7 @@ type limit struct {
 
 func (l *limit) inc() bool {
   n := atomic.AddUint32(&l.count, 1)
-  if n >= l.limit {
+  if n > l.limit {
     l.dec()
     return false
   }
@@ -147,10 +147,10 @@ func limitWait(min, max int) int {
 
 func limitWaitStreamReq() int {
   // Time to tell requestor to wait when sending a streaming requests while limit has been reached
-  return limitWait(1000, 20000)
+  return limitWait(500, 5000)
 }
 
 func limitWaitBufferReq() int {
   // Time to tell requestor to wait when sending a buffer requests while limit has been reached
-  return limitWait(1000, 20000)
+  return limitWait(500, 5000)
 }

@@ -56,7 +56,7 @@ var DefaultHandlers = NewHandlers()
 //
 // If `op` is empty, handle all requests which doesn't have a specific handler registered.
 func Handle(op string, fn interface{}) {
-  DefaultHandlers.HandleRequest(op, fn)
+  DefaultHandlers.Handle(op, fn)
 }
 
 // Handle operation with raw input and output buffers. If `op` is empty, handle
@@ -98,7 +98,7 @@ type noteHandlerMap      map[string]BufferNoteHandler
 
 
 // See Handle()
-func (h *Handlers) HandleRequest(op string, fn interface{}) {
+func (h *Handlers) Handle(op string, fn interface{}) {
   h.HandleBufferRequest(op, wrapFuncReqHandler(fn))
 }
 

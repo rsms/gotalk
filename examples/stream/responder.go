@@ -4,6 +4,7 @@ import (
   "net/http"
   "time"
   "github.com/rsms/gotalk"
+  "fmt"
 )
 
 // Fecth a random joke from an external API
@@ -23,7 +24,7 @@ func fetchRandomJoke() (string, error) {
 }
 
 
-func acceptor(port string) {
+func responder(port string) {
 
   // Handle streaming request & result
   gotalk.HandleStreamRequest(
@@ -34,7 +35,7 @@ func acceptor(port string) {
 
       // Read streaming request payloads
       for b := <-in; b != nil; b = <-in {
-        println("joke request payload: \"" + string(b) + "\"")
+        fmt.Printf("responder: received request payload: %q\n", string(b))
       }
 
       // Send three jokes as three separate stream payloads
@@ -58,7 +59,7 @@ func acceptor(port string) {
   if err != nil {
     panic(err)
   }
-  s.StreamReqLimit = 3  // Enable streaming requests
-  println("listening at", s.Addr())
+  s.Limits = gotalk.NoLimits  // Remove any limits on streaming requests
+  fmt.Printf("responder: listening at %s\n", s.Addr())
   go s.Accept()
 }

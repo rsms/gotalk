@@ -1,4 +1,3 @@
-// Demonstrates using streaming requests and results
 package main
 
 func main() {

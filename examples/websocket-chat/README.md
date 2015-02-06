@@ -1,4 +1,3 @@
-
 This is a multi-room chat app implemented in gotalk.
 
     go build && ./websocket-chat

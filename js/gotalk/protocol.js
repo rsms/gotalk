@@ -13,7 +13,12 @@ var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     'r'.charCodeAt(0),
     MsgTypeStreamRes     = exports.MsgTypeStreamRes =     'S'.charCodeAt(0),
     MsgTypeErrorRes      = exports.MsgTypeErrorRes =      'E'.charCodeAt(0),
     MsgTypeRetryRes      = exports.MsgTypeRetryRes =      'e'.charCodeAt(0),
-    MsgTypeNotification  = exports.MsgTypeNotification =  'n'.charCodeAt(0);
+    MsgTypeNotification  = exports.MsgTypeNotification =  'n'.charCodeAt(0),
+    MsgTypeProtocolError = exports.MsgTypeProtocolError = 'f'.charCodeAt(0);
+
+// ProtocolError codes
+exports.ErrorUnsupported = 1;
+exports.ErrorInvalidMsg = 2;
 
 // ==============================================================================================
 // Binary (byte) protocol
@@ -50,9 +55,9 @@ exports.binary = {
     t = b[0];
     z = 1;
 
-    if (t !== MsgTypeNotification) {
-      id = b.slice(z, z + 3);
-      z += 3;
+    if (t !== MsgTypeNotification && t !== MsgTypeProtocolError) {
+      id = b.slice(z, z + 4);
+      z += 4;
     }
 
     if (t == MsgTypeSingleReq || t == MsgTypeStreamReq || t == MsgTypeNotification) {
@@ -69,7 +74,7 @@ exports.binary = {
 
   // Create a text string representing a message (w/o any payload.)
   makeMsg: function (t, id, name, size) {
-    var b, z = id ? 12 : 9, nameb;
+    var b, nameb, z = id ? 13 : 9;
 
     if (name && name.length !== 0) {
       nameb = Buf.fromString(name);
@@ -81,17 +86,19 @@ exports.binary = {
     b[0] = t;
     z = 1;
 
-    if (id && id.length !== 0) {
+    if (id && id.length === 4) {
       if (typeof id === 'string') {
         b[1] = id.charCodeAt(0);
         b[2] = id.charCodeAt(1);
         b[3] = id.charCodeAt(2);
+        b[4] = id.charCodeAt(3);
       } else {
         b[1] = id[0];
         b[2] = id[1];
         b[3] = id[2];
+        b[4] = id[3];
       }
-      z += 3;
+      z += 4;
     }
 
     if (name && name.length !== 0) {
@@ -139,9 +146,9 @@ exports.text = {
     t = s.charCodeAt(0);
     z = 1;
 
-    if (t !== MsgTypeNotification) {
-      id = s.substr(z, 3);
-      z += 3;
+    if (t !== MsgTypeNotification && t !== MsgTypeProtocolError) {
+      id = s.substr(z, 4);
+      z += 4;
     }
 
     if (t == MsgTypeSingleReq || t == MsgTypeStreamReq || t == MsgTypeNotification) {
@@ -158,7 +165,7 @@ exports.text = {
   makeMsg: function (t, id, name, size) {
     var b = String.fromCharCode(t);
 
-    if (id && id.length !== 0) {
+    if (id && id.length === 4) {
       b += id;
     }
 

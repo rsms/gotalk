@@ -1,8 +1,8 @@
 <!DOCTYPE HTML>
-<html lang="en" prefix="og: http://ogp.me/ns#">
+<html lang="en">
   <head>
     <meta charset="utf-8">
-    <script type="text/javascript" src="gotalk.js"></script>
+    <script type="text/javascript" src="/gotalk/js"></script>
     <style type="text/css">
 body { font:16px helvetica,sans-serif; background:white; color:#222; }
 tt,li,pre,code { font-family:consolas,menlo,monospace; }
@@ -34,7 +34,7 @@ li { line-height:1.4; }
         <input type="submit" value="Send">
       </form>
       <form class="box closesock">
-        <input type="submit" value="Close socket">
+        <input type="submit" value="Sock.end()">
       </form>
       <ul class="box" id="log"></ul>
     </div>
@@ -72,14 +72,12 @@ gotalk.handle('greet', function (params, result) {
   result(res);
 });
 
-var url = 'ws://'+document.location.host+'/gotalk';
-log('connecting to', url);
+log('connecting to', gotalk.defaultResponderAddress);
 
-var s = gotalk.connect(url, function (err, s) {
-  if (err) return log('failed to connect:', err);
+var s = gotalk.connection().on('open', function () {
   log('socket opened');
 }).on('close', function (err) {
-  log('socket closed (code ',err,')');
+  log('socket closed', err);
 }).on('notification', function (n, v) {
   log('received notification "'+name+'":', value);
 });

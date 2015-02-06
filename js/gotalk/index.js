@@ -5,6 +5,8 @@ var protocol = require('./protocol'),
 var Buf = require('./buf');
 var utf8 = require('./utf8');
 var EventEmitter = require('./EventEmitter');
+var keepalive = require('./keepalive');
+
 var gotalk = exports;
 
 gotalk.protocol = protocol;
@@ -30,10 +32,11 @@ function Sock(handlers) { return Object.create(Sock.prototype, {
 
   // Internal
   ws:            {value:null, writable:true},
+  keepalive:     {value:null, writable:true},
 
   // Used for performing requests
   nextOpID:      {value:0, writable:true},
-  pendingRes:    {value:{}},
+  pendingRes:    {value:{}, writable:true},
   hasPendingRes: {get:function(){ for (var k in this.pendingRes) { return true; } }},
 
   // True if end() has been called while there were outstanding responses
@@ -42,6 +45,42 @@ function Sock(handlers) { return Object.create(Sock.prototype, {
 
 Sock.prototype = EventEmitter.mixin(Sock.prototype);
 exports.Sock = Sock;
+
+
+var resetSock = function(s, causedByErr) {
+  s.pendingClose = false;
+
+  if (s.ws) {
+    s.ws.onmessage = null;
+    s.ws.onerror = null;
+    s.ws.onclose = null;
+    s.ws = null;
+  }
+
+  s.nextOpID = 0;
+  if (s.hasPendingRes) {
+    var err = causedByErr || new Error('connection closed');
+    // TODO: return a RetryResult kind of error instead of just an error
+    for (var k in s.pendingRes) {
+      s.pendingRes[k](err);
+    }
+    s.pendingRes = {};
+  }
+};
+
+
+var websocketCloseStatus = {
+  1000: 'normal',
+  1001: 'going away',
+  1002: 'protocol error',
+  1003: 'unsupported',
+  // 1004 is currently unassigned
+  1005: 'no status',
+  1006: 'abnormal',
+  1007: 'inconsistent',
+  1008: 'invalid message',
+  1009: 'too large',
+};
 
 
 // Adopt a web socket, which should be in an OPEN state
@@ -55,13 +94,10 @@ Sock.prototype.adoptWebSocket = function(ws) {
   ws.onclose = function(ev) {
     var err = ws._gotalkCloseError;
     if (!err && ev.code !== 1000) {
-      err = new Error('web socket #'+ev.code);
+      err = new Error('websocket closed: ' + (websocketCloseStatus[ev.code] || '#'+ev.code));
     }
+    resetSock(s, err);
     s.emit('close', err);
-    ws.onmessage = null;
-    ws.onerror = null;
-    ws.onclose = null;
-    s.ws = null;
   };
   ws.onmessage = function(ev) {
     if (!ws._bufferedMessages) ws._bufferedMessages = [];
@@ -78,21 +114,14 @@ Sock.prototype.handshake = function () {
 Sock.prototype.end = function() {
   // Allow calling twice to "force close" even when there are pending responses
   var s = this;
+  if (s.keepalive) {
+    s.keepalive.disable();
+    s.keepalive = null;
+  }
   if (!s.pendingClose && s.hasPendingRes) {
     s.pendingClose = true;
-  } else {
-    if (s.hasPendingRes) {
-      var err = new Error('socket is closing');
-      for (var k in pendingRes) {
-        pendingRes[k](err);
-      }
-    }
-    if (s.ws) {
-      s.ws.close();
-    } else if (s.conn) {
-      s.conn.end();
-    }
-    s.pendingClose = false;
+  } else if (s.ws) {
+    s.ws.close();
   }
 };
 
@@ -108,15 +137,36 @@ Sock.prototype.address = function() {
 // ===============================================================================================
 // Reading messages from a connection
 
+
+var ErrUnsupported = exports.ErrUnsupported = Error("unsupported protocol");
+ErrUnsupported.isGotalkProtocolError = true;
+ErrUnsupported.code = protocol.ErrorUnsupported;
+
+var ErrInvalidMsg = exports.ErrInvalidMsg = Error("invalid protocol message");
+ErrInvalidMsg.isGotalkProtocolError = true;
+ErrInvalidMsg.code = protocol.ErrorInvalidMsg;
+
+
 Sock.prototype.startReading = function () {
   var s = this, ws = s.ws, msg;  // msg = current message
 
   function readMsg(ev) {
     msg = typeof ev.data === 'string' ? txt.parseMsg(ev.data) : bin.parseMsg(Buf(ev.data));
-    // console.log('readMsg:',
+    // console.log(
+    //   'readMsg:',
     //   typeof ev.data === 'string' ? ev.data : Buf(ev.data).toString(),
-    //   'msg:', msg, 'ev:', ev);
-    if (msg.size !== 0) {
+    //   'msg:',
+    //   msg
+    // );
+    if (msg.t === protocol.MsgTypeProtocolError) {
+      var errcode = msg.size;
+      if (errcode === protocol.ErrorUnsupported) {
+        ws._gotalkCloseError = ErrUnsupported;
+      } else {
+        ws._gotalkCloseError = ErrInvalidMsg;
+      }
+      ws.close(4000 + errcode);
+    } else if (msg.size !== 0) {
       ws.onmessage = readMsgPayload;
     } else {
       s.handleMsg(msg);
@@ -126,17 +176,17 @@ Sock.prototype.startReading = function () {
 
   function readMsgPayload(ev) {
     var b = ev.data;
+    ws.onmessage = readMsg;
     s.handleMsg(msg, typeof b === 'string' ? b : Buf(b));
     msg = null;
-    ws.onmessage = readMsg;
   }
 
   function readVersion(ev) {
     var peerVersion = typeof ev.data === 'string' ? txt.parseVersion(ev.data) :
                                                     bin.parseVersion(Buf(ev.data));
     if (peerVersion !== protocol.Version) {
-      ws._gotalkCloseError = new Error('unsupported gotalk protocol version');
-      ws.close(4001);
+      ws._gotalkCloseError = ErrUnsupported;
+      s.closeError(protocol.ErrorUnsupported);
     } else {
       ws.onmessage = readMsg;
     }
@@ -147,7 +197,6 @@ Sock.prototype.startReading = function () {
 
   // Any buffered messages?
   if (ws._bufferedMessages) {
-    console.log("flush buffered messages")
     ws._bufferedMessages.forEach(function(data){ ws.onmessage({data:data}); });
     ws._bufferedMessages = null;
   }
@@ -160,7 +209,13 @@ var msgHandlers = {};
 
 Sock.prototype.handleMsg = function(msg, payload) {
   // console.log('handleMsg:', String.fromCharCode(msg.t), msg, 'payload:', payload);
-  return msgHandlers[msg.t].call(this, msg, payload);
+  var msgHandler = msgHandlers[msg.t];
+  if (!msgHandler) {
+    ws._gotalkCloseError = ErrInvalidMsg;
+    s.closeError(protocol.ErrInvalidMsg);
+  } else {
+    msgHandler.call(this, msg, payload);
+  }
 };
 
 msgHandlers[protocol.MsgTypeSingleReq] = function (msg, payload) {
@@ -176,7 +231,7 @@ msgHandlers[protocol.MsgTypeSingleReq] = function (msg, payload) {
   };
 
   if (typeof handler !== 'function') {
-    result.error('no such operation');
+    result.error('no such operation "'+msg.name+'"');
   } else {
     try {
       handler(payload, result, msg.name);
@@ -217,10 +272,8 @@ msgHandlers[protocol.MsgTypeNotification] = function (msg, payload) {
 // ===============================================================================================
 // Sending messages
 
+
 Sock.prototype.sendMsg = function(t, id, name, payload) {
-  if (!this.ws || this.ws.readyState > WebSocket.OPEN) {
-    throw new Error('socket is closed');
-  }
   var payloadSize = (payload && typeof payload === 'string' && this.protocol === protocol.binary) ?
     utf8.sizeOf(payload) :
     payload ? payload.length :
@@ -228,23 +281,39 @@ Sock.prototype.sendMsg = function(t, id, name, payload) {
   var s = this, buf = s.protocol.makeMsg(t, id, name, payloadSize);
   // console.log('sendMsg(',t,id,name,payload,'): protocol.makeMsg =>',
   //   typeof buf === 'string' ? buf : buf.toString());
-  s.ws.send(buf);
-  if (payloadSize !== 0) {
-    s.ws.send(payload);
+  try {
+    s.ws.send(buf);
+    if (payloadSize !== 0) {
+      s.ws.send(payload);
+    }
+  } catch (err) {
+    if (!this.ws || this.ws.readyState > WebSocket.OPEN) {
+      err = new Error('socket is closed');
+    }
+    throw err;
   }
 };
 
-var zeroes = '000';
+
+Sock.prototype.closeError = function(code) {
+  try {
+    var s = this, buf = s.protocol.makeMsg(protocol.MsgTypeProtocolError, null, null, code);
+    s.ws.send(buf);
+  } catch (e) {}
+  ws.close(4000 + code);
+};
+
+var zeroes = '0000';
 
 // callback function(Error, outbuf)
 Sock.prototype.bufferRequest = function(op, buf, callback) {
   var s = this, id = s.nextOpID++;
-  if (s.nextOpID === 46656) {
-    // limit for base36 within 3 digits (36^2=46656)
+  if (s.nextOpID === 1679616) {
+    // limit for base36 within 4 digits (36^4=1679616)
     s.nextOpID = 0;
   }
   id = id.toString(36);
-  id = zeroes.substr(0,3 - id.length) + id;
+  id = zeroes.substr(0, 4 - id.length) + id;
   s.pendingRes[id] = callback;
   try {
     s.sendMsg(protocol.MsgTypeSingleReq, id, op, buf);
@@ -337,7 +406,7 @@ Handlers.prototype.findNotificationHandler = function(name) {
 
 // ===============================================================================================
 
-function connectWebSocket(s, addr, callback) {
+function openWebSocket(s, addr, callback) {
   var ws;
   try {
     ws = new WebSocket(addr);
@@ -345,7 +414,6 @@ function connectWebSocket(s, addr, callback) {
     ws.onclose = function (ev) {
       var err = new Error('connection failed');
       if (callback) callback(err);
-      s.emit('close', err);
     };
     ws.onopen = function(ev) {
       ws.onerror = undefined;
@@ -366,15 +434,77 @@ function connectWebSocket(s, addr, callback) {
 }
 
 
-gotalk.connect = function connect(addr, callback) {
-  var s = Sock(gotalk.defaultHandlers);
-  if (addr.substr(0,5) === 'ws://') {
-    connectWebSocket(s, addr, callback);
+// gotalk.defaultResponderAddress is defined if the responder has announced a default address
+// to which connect to.
+if (window.gotalkResponderAt !== undefined) {
+  var at = window.gotalkResponderAt;
+  delete window.gotalkResponderAt;
+  if (at && at.ws) {
+    gotalk.defaultResponderAddress = 'ws://' + document.location.host + at.ws;
+  }
+}
+
+
+Sock.prototype.open = function(addr, callback) {
+  var s = this;
+  if (!callback && typeof addr == 'function') {
+    callback = addr;
+    addr = null;
+  }
+
+  if (!addr) {
+    if (!gotalk.defaultResponderAddress) {
+      throw new Error('address not specified (responder has not announced any default address)')
+    }
+    addr = gotalk.defaultResponderAddress;
+  }
+
+  if (addr.substr(0,3) === 'ws:') {
+    openWebSocket(s, addr, callback);
   } else {
     throw new Error('unsupported address');
   }
   return s;
 };
+
+
+// Open a connection to a gotalk responder.
+// 
+// open(addr string[, onConnect(Error, Sock)]) -> Sock
+//   Connect to gotalk responder at `addr`
+//
+// open([onConnect(Error, Sock)]) -> Sock
+//   Connect to default gotalk responder.
+//   Throws an error if `gotalk.defaultResponderAddress` isn't defined.
+//
+gotalk.open = function(addr, onConnect) {
+  var s = Sock(gotalk.defaultHandlers);
+  s.open(addr, onConnect);
+  return s;
+};
+
+
+// If `addr` is not provided, `gotalk.defaultResponderAddress` is used instead.
+Sock.prototype.openKeepAlive = function(addr) {
+  var s = this;
+  if (s.keepalive) {
+    s.keepalive.disable();
+  }
+  s.keepalive = keepalive(s, addr);
+  s.keepalive.enable();
+  return s;
+};
+
+
+// Returns a new Sock with a persistent connection to a gotalk responder.
+// The Connection is automatically kept alive (by reconnecting) until Sock.end() is called.
+// If `addr` is not provided, `gotalk.defaultResponderAddress` is used instead.
+gotalk.connection = function(addr) {
+  var s = Sock(gotalk.defaultHandlers);
+  s.openKeepAlive(addr);
+  return s;
+};
+
 
 gotalk.defaultHandlers = Handlers();
 
@@ -393,4 +523,7 @@ gotalk.handleBufferNotification = function (name, handler) {
 gotalk.handleNotification = function (name, handler) {
   return gotalk.defaultHandlers.handleNotification(name, handler);
 };
+
+// -----------------------------------------------------------------------------------------------
+
 

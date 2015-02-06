@@ -1,0 +1,27 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <script type="text/javascript" src="/gotalk/js"></script>
+  </head>
+  <body>
+    <script>
+
+var s = gotalk.connection()
+  .on('open', function (err) {
+    if (err) return console.error(err);
+    s.request('echo', 'hello', function (err, result) {
+      if (err) return console.error(err);
+      console.log('echo:', result);
+    });
+  })
+  .on('close', function (err) {
+    console.log('socket closed', err);
+  })
+  .on('notification', function (name, value) {
+    console.log('received notification "'+name+'":', value);
+  });
+
+    </script>
+  </body>
+</html>

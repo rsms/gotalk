@@ -263,26 +263,8 @@ function onConnect(s) {
 }
 
 
-// Stay connected by automatically reconnect when closed or on connect error
-var s, connectDelay;
-function reconnect() {
-  connectDelay = connectDelay ? Math.min(5000, connectDelay * 2) : 500;
-  console.log('server is unreachable — reconnecting in', (connectDelay/1000), 's');
-  setTimeout(connect, connectDelay);
-}
-function connect() {
-  s = gotalk.connect('ws://'+document.location.host+'/gotalk', function (err, s) {
-    if (err) {
-      reconnect();
-    } else {
-      console.log('connected');
-      connectDelay = 0;
-      s.on('close', reconnect);
-      onConnect(s);
-    }
-  });
-}
-connect();
+// Connect to server
+var s = gotalk.connection().on('open', onConnect);
 
 
 // Intercept ctrl+accesskey

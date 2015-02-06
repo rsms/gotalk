@@ -22,7 +22,7 @@ EventEmitter.prototype.on = EventEmitter.prototype.addListener;
 
 EventEmitter.prototype.once = function (type, listener) {
   var fired = false;
-  function trigger_event_once() {
+  var trigger_event_once = function() {
     this.removeListener(type, trigger_event_once);
     if (!fired) {
       fired = true;
@@ -36,7 +36,7 @@ EventEmitter.prototype.removeListener = function (type, listener) {
   var p, listeners = this.__events ? this.__events[type] : undefined;
   if (listeners !== undefined) {
     while ((p = listeners.indexOf(listener)) !== -1) {
-      delete listeners[p];
+      listeners.splice(p,1);
     }
     if (listeners.length === 0) {
       delete this.__events[type];
@@ -67,6 +67,9 @@ EventEmitter.prototype.emit = function (type) {
   }
   var i = 0, L = listeners.length, args = Array.prototype.slice.call(arguments,1);
   for (; i !== L; ++i) {
+    if (!listeners[i]) {
+      console.log('e', type, i, args);
+    }
     listeners[i].apply(this, args);
   }
   return true;

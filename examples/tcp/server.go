@@ -1,41 +1,51 @@
 package main
 import (
-  "log"
+  "fmt"
   "github.com/rsms/gotalk"
 )
 
-// Describes the request parameter and operation result types for our "greet" operation
-type GreetIn struct {
-  Name string `json:"name"`
-}
+func server(port string) {
+  // Use a separate set of handlers for the server, as we are running the client in the same
+  // program and thus we would have both server and client register handlers on DefaultHandlers.
+  handlers := gotalk.NewHandlers()
 
-type GreetOut struct {
-  Greeting string `json:"greeting"`
-}
-
-func main() {
   // Handle JSON-encoded request & result
-  gotalk.Handle("greet", func(in GreetIn) (GreetOut, error) {
-    println("in greet handler: in.Name=", in.Name)
+  handlers.Handle("greet", func(in GreetIn) (GreetOut, error) {
+    fmt.Printf("server: handling 'greet' request: %+v\n", in)
     return GreetOut{"Hello " + in.Name}, nil
   })
 
   // Handle buffered request & result
-  gotalk.HandleBufferRequest("echo", func(_ *gotalk.Sock, _ string, b []byte) ([]byte, error) {
-    println("in echo handler: inbuf=", string(b))
+  handlers.HandleBufferRequest("echo", func(_ *gotalk.Sock, _ string, b []byte) ([]byte, error) {
+    fmt.Printf("server: handling 'echo' request: %q\n", string(b))
     return b, nil
   })
 
   // Handle all notifications
-  gotalk.HandleBufferNotification("", func(_ *gotalk.Sock, name string, b []byte) {
-    log.Printf("got notification: \"%s\" => \"%v\"\n", name, string(b))
+  handlers.HandleBufferNotification("", func(s *gotalk.Sock, name string, b []byte) {
+    fmt.Printf("server: received notification: %q => %q\n", name, string(b))
+
+    // Send a request to the other end.
+    // Note that we must do this in a goroutine as we would otherwise block this function from
+    // returning the response, meaning our client() function would block indefinitely on waiting
+    // for a response.
+    go func() {
+      fmt.Printf("server: sending 'ping' request\n")
+      reply, err := s.BufferRequest("ping", []byte("abc"))
+      if err != nil {
+        fmt.Printf("server: ping: error %v\n", err.Error())
+      } else {
+        fmt.Printf("server: ping: %v\n", string(reply))
+      }
+    }()
   })
 
   // Accept connections
-  s, err := gotalk.Listen("tcp", "localhost:1234")
+  s, err := gotalk.Listen("tcp", "localhost:"+port)
   if err != nil {
-    log.Fatalln(err)
+    panic(err)
   }
-  println("listening at", s.Addr())
-  s.Accept()
+  s.Handlers = handlers
+  fmt.Printf("server: listening at %s\n", s.Addr())
+  go s.Accept()
 }
