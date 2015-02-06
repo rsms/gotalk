@@ -12,6 +12,6 @@ func main() {
   http.Handle("/", http.FileServer(http.Dir(".")))
   err := http.ListenAndServe("localhost:1234", nil)
   if err != nil {
-    panic(err.Error())
+    panic(err)
   }
 }

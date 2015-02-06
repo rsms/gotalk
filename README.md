@@ -162,14 +162,14 @@ import (
   "github.com/rsms/gotalk"
 )
 func main() {
-  gotalk.HandleBufferRequest("echo", func(in []byte) ([]byte, error) {
+  gotalk.Handle("echo", func(in string) (string, error) {
     return in, nil
   })
-  http.Handle("/gotalk", gotalk.WebSocketHandler(nil, nil))
+  http.Handle("/gotalk/", gotalk.WebSocketHandler())
   http.Handle("/", http.FileServer(http.Dir(".")))
-  err := http.ListenAndServe(":1234", nil)
+  err := http.ListenAndServe("localhost:1234", nil)
   if err != nil {
-    panic("ListenAndServe: " + err.Error())
+    panic(err)
   }
 }
 ```
@@ -179,7 +179,7 @@ In our html document, we begin by registering any operations we can handle:
 ```html
 <!-- index.html -->
 <body>
-<script type="text/javascript" src="gotalk.js"></script>
+<script type="text/javascript" src="/gotalk/js"></script>
 <script>
 gotalk.handle('greet', function (params, result) {
   result({ greeting: 'Hello ' + params.name });
@@ -187,20 +187,23 @@ gotalk.handle('greet', function (params, result) {
 </script>
 ```
 
+Notice how we load a JavaScript from "/gotalk/js" — a gotalk web socket server embeds a matching web browser JS library which it returns from `{path where gotalk web socket is mounted}/js`. It uses Etag cache validation, so you shouldn't need to think about "cache busting" the URL.
+
 We can't "listen & accept" connections in a web browser, but we can "connect" so we do just that, connecting to "/gotalk" which is where we registered `gotalk.WebSocketHandler` in our server.
 
 ```html
 <!-- index.html -->
 <body>
-<script type="text/javascript" src="gotalk.js"></script>
+<script type="text/javascript" src="/gotalk/js"></script>
 <script>
 gotalk.handle('greet', function (params, result) {
   result({ greeting: 'Hello ' + params.name });
 });
 
-gotalk.connect('ws://'+document.location.host+'/gotalk', function (err, s) {
-  if (err) return console.error(err);
-  // s is a gotalk.Sock
+var s = gotalk.connection().on('open', function () {
+  // do something useful
+}).on('close', function (err) {
+  if (err.isGotalkProtocolError) return console.error(err);
 });
 </script>
 ```
@@ -210,8 +213,7 @@ This is enough for enabling the *server* to do things in the *browser* ...
 But you probably want to have the *browser* send requests to the *server*, so let's send a "echo" request just as our connection opens:
 
 ```js
-gotalk.connect('ws://'+document.location.host+'/gotalk', function (err, s) {
-  if (err) return console.error(err);
+var s = gotalk.connection().on('open', function () {
   s.request("echo", "Hello world", function (err, result) {
     if (err) return console.error('echo failed:', err);
     console.log('echo result:', result);
@@ -222,9 +224,7 @@ gotalk.connect('ws://'+document.location.host+'/gotalk', function (err, s) {
 We could rewrite our code like this to allow some UI component to send a request:
 
 ```js
-var s = gotalk.connect('ws://'+document.location.host+'/gotalk', function (err, s) {
-  if (err) return console.error(err);
-});
+var s = gotalk.connection();
 
 button.addEventListener('click', function () {
   s.request("echo", "Hello world", function (err, result) {
@@ -235,6 +235,8 @@ button.addEventListener('click', function () {
 ```
 
 The request will fail with an error "socket is closed" if the user clicks our button while the connection isn't open.
+
+There are two ways to open a connection on a socket: `Sock.prototype.open` which simply opens a connection, and `Sock.prototype.openKeepAlive` which keeps the connection open, reconnecting as needed with exponential back-off and internet reachability knowledge. `gotalk.connection()` is a short-hand for creating a new Sock with `gotalk.defaultHandlers` and then calling `openKeepAlive` on it.
 
 
 ## Protocol and wire format

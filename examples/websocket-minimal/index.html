@@ -8,8 +8,7 @@
     <script>
 
 var s = gotalk.connection()
-  .on('open', function (err) {
-    if (err) return console.error(err);
+  .on('open', function () {
     s.request('echo', 'hello', function (err, result) {
       if (err) return console.error(err);
       console.log('echo:', result);
