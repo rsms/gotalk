@@ -217,8 +217,17 @@ func decodeParams(paramsType reflect.Type, inbuf []byte) (*reflect.Value, error)
 }
 
 
-func typeIsSockPtr(t reflect.Type) bool {
-  return t.Kind() == reflect.Ptr && t.Elem().AssignableTo(kSockType)
+type sockPtrToValueFunc func(*Sock)reflect.Value
+
+func typeIsSockPtr(t reflect.Type) (ok bool, sockPtrToValue sockPtrToValueFunc) {
+  if t.Kind() == reflect.Ptr {
+    if t.Elem().AssignableTo(kSockType) {
+      return true, func(s *Sock) reflect.Value { return reflect.ValueOf(s) }
+    } else if t.Elem().ConvertibleTo(kSockType) {
+      return true, func(s *Sock) reflect.Value { return reflect.ValueOf(s).Convert(t) }
+    }
+  }
+  return false, nil
 }
 
 
@@ -240,11 +249,17 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
     panic(errMsgBadHandler)
   }
 
-  if fnt.NumIn() == 3 {
-    // `func(*Sock, string, interface{}) (interface{}, error)`
-    if typeIsSockPtr(fnt.In(0)) == false {
+  var in0IsSockPtr bool
+  var sockPtrToValue sockPtrToValueFunc
+  if fnt.NumIn() > 1 {
+    in0IsSockPtr, sockPtrToValue = typeIsSockPtr(fnt.In(0))
+    if in0IsSockPtr == false {
       panic(errMsgBadHandler)
     }
+  }
+
+  if fnt.NumIn() == 3 {
+    // `func(*Sock, string, interface{}) (interface{}, error)`
     if fnt.In(1).Kind() != reflect.String {
       panic(errMsgBadHandler)
     }
@@ -255,15 +270,12 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
       if err != nil {
         return nil, err
       }
-      r := fnv.Call([]reflect.Value{reflect.ValueOf(s), reflect.ValueOf(op), paramsVal.Elem()})
+      r := fnv.Call([]reflect.Value{sockPtrToValue(s), reflect.ValueOf(op), paramsVal.Elem()})
       return decodeResult(r)
     })
 
   } else if fnt.NumIn() == 2 {
     // Signature: `func(*Sock, interface{})(interface{}, error)`
-    if typeIsSockPtr(fnt.In(0)) == false {
-      panic(errMsgBadHandler)
-    }
     paramsType := fnt.In(1)
 
     return BufferReqHandler(func (s *Sock, _ string, inbuf []byte) ([]byte, error) {
@@ -271,29 +283,17 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
       if err != nil {
         return nil, err
       }
-      r := fnv.Call([]reflect.Value{reflect.ValueOf(s), paramsVal.Elem()})
+      r := fnv.Call([]reflect.Value{sockPtrToValue(s), paramsVal.Elem()})
       return decodeResult(r)
     })
 
   } else if fnt.NumIn() == 1 {
-    if typeIsSockPtr(fnt.In(0)) {
-      if fnt.NumOut() == 2 {
-        // Signature: `func(*Sock)(interface{}, error)`
-        return BufferReqHandler(func (s *Sock, _ string, _ []byte) ([]byte, error) {
-          r := fnv.Call([]reflect.Value{reflect.ValueOf(s)})
-          return decodeResult(r)
-        })
-      } else {
-        // Signature: `func(*Sock)error`
-        f, ok := fn.(func(*Sock)error)
-        if ok == false {
-          panic(errMsgBadHandler)
-        }
-        return BufferReqHandler(func (s *Sock, _ string, _ []byte) ([]byte, error) {
-          return nil, f(s)
-        })
-      }
-
+    if in0IsSockPtr {
+      // Signature: `func(*Sock)(interface{}, error)`
+      return BufferReqHandler(func (s *Sock, _ string, _ []byte) ([]byte, error) {
+        r := fnv.Call([]reflect.Value{sockPtrToValue(s)})
+        return decodeResult(r)
+      })
     } else {
       // Signature: `func(interface{})(interface{}, error)`
       paramsType := fnt.In(0)
@@ -347,14 +347,15 @@ func wrapFuncNotHandler(fn interface{}) BufferNoteHandler {
 
   if fnt.NumIn() == 3 {
     // Signature: `func(*Sock, string, interface{})`
-    if typeIsSockPtr(fnt.In(0)) == false || fnt.In(1).Kind() != reflect.String {
+    in0IsSockPtr, sockPtrToValue := typeIsSockPtr(fnt.In(0))
+    if in0IsSockPtr == false || fnt.In(1).Kind() != reflect.String {
       panic(errMsgBadHandler)
     }
     paramsType := fnt.In(2)
     return BufferNoteHandler(
       func (s *Sock, name string, inbuf []byte) {
         paramsVal, _ := decodeParams(paramsType, inbuf)
-        fnv.Call([]reflect.Value{reflect.ValueOf(s), reflect.ValueOf(name), paramsVal.Elem()})
+        fnv.Call([]reflect.Value{sockPtrToValue(s), reflect.ValueOf(name), paramsVal.Elem()})
       })
   } else if fnt.NumIn() == 2 {
     // Signature: `func(string, interface{})`
