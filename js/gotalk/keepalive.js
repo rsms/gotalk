@@ -2,6 +2,7 @@
 // Stay connected by automatically reconnecting w/ exponential back-off.
 
 var netAccess = require('./netaccess');
+var protocol = require('./protocol');
 
 // `s` must conform to interface { connect(addr string, cb function(Error)) }
 // Returns an object {
@@ -77,12 +78,16 @@ var keepalive = function(s, addr, minReconnectDelay, maxReconnectDelay) {
     }
     if (err) {
       if (err.isGotalkProtocolError) {
-        // We shouldn't retry with the same version of our gotalk library.
-        // However, the only sensible thing to do in this case is to let the user code react to
-        // the error passed to the close event (e.g. to show a "can't talk to server" UI), and
-        // retry in maxReconnectDelay.
-        // User code can choose to call `disable()` on its keepalive object in this case.
-        delay = maxReconnectDelay;
+        if (err.code === protocol.ErrorTimeout) {
+          delay = 0;
+        } else {
+          // We shouldn't retry with the same version of our gotalk library.
+          // However, the only sensible thing to do in this case is to let the user code react to
+          // the error passed to the close event (e.g. to show a "can't talk to server" UI), and
+          // retry in maxReconnectDelay.
+          // User code can choose to call `disable()` on its keepalive object in this case.
+          delay = maxReconnectDelay;
+        }
       } else {
         // increase back off in case of an error
         delay = delay ? Math.min(maxReconnectDelay, delay * 2) : minReconnectDelay;

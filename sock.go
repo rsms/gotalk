@@ -8,6 +8,7 @@ import (
   "sync"
   "fmt"
   "time"
+  "runtime"
 )
 
 var (
@@ -31,16 +32,26 @@ type Sock struct {
   // any "end stream" messages, slowly exhausting memory.
   StreamReqLimit int
 
-  // A function to be called when the socket closes
-  CloseHandler func(*Sock)
+  // A function to be called when the socket closes.
+  // If the socket was closed because of a protocol error, `code` is >=0 and represents a
+  // ProtocolError* constant.
+  CloseHandler func(s *Sock, code int)
 
   // Automatically retry requests which can be retried
   AutoRetryRequests bool
+
+  // HeartbeatInterval controls how much time a socket waits between sending its heartbeats.
+  // If this is 0, automatic sending of heartbeats is disabled. Defaults to 20 seconds.
+  HeartbeatInterval time.Duration
+
+  // If not nil, this function is invoked when a heartbeat is recevied
+  OnHeartbeat func(load int, t time.Time)
 
   // -------------------------------------------------------------------------
   // Used by connected sockets
   wmu            sync.Mutex          // guards writes on conn
   conn           io.ReadWriteCloser  // non-nil after successful call to Connect or accept
+  closeCode      int  // protocol error, or -1
 
   // Used for sending requests:
   nextOpID       uint32
@@ -54,7 +65,7 @@ type Sock struct {
 
 
 func NewSock(h *Handlers) *Sock {
-  return &Sock{Handlers:h}
+  return &Sock{Handlers:h, closeCode:-1, HeartbeatInterval:20 * time.Second}
 }
 
 
@@ -87,13 +98,12 @@ func Connect(how, addr string) (*Sock, error) {
 }
 
 
-// Adopt an I/O stream, which should already be in a "connected" state. After calling this,
-// you need to call Handshake and Read to perform the protocol handshake and read messages.
+// Adopt an I/O stream, which should already be in a "connected" state.
+// After adopting a new connection, you should call Handshake to perform the protocol
+// handshake, followed by Read to read messages.
 func (s *Sock) Adopt(c io.ReadWriteCloser) {
-  if s.conn != nil {
-    panic("already adopted")
-  }
   s.conn = c
+  s.closeCode = -1
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -110,6 +120,11 @@ func (s *Sock) Connect(how, addr string, limits Limits) error {
   }
   go s.Read(limits)
   return nil
+}
+
+// Access the socket's underlying connection
+func (s *Sock) Conn() io.ReadWriteCloser {
+  return s.conn
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -183,10 +198,10 @@ func (s *Sock) deallocReqChan(id string) {
 
 // ----------------------------------------------------------------------------------------------
 
+var errNotConnected = errors.New("not connected")
+
 func (s *Sock) writeMsg(t MsgType, id, op string, wait int, buf []byte) error {
-  if s.conn == nil {
-    panic("not connected")
-  }
+  if s.conn == nil { return errNotConnected }
   s.wmu.Lock()
   defer s.wmu.Unlock()
   if _, err := s.conn.Write(MakeMsg(t, id, op, wait, len(buf))); err != nil {
@@ -200,11 +215,29 @@ func (s *Sock) writeMsg(t MsgType, id, op string, wait int, buf []byte) error {
 }
 
 
+func (s *Sock) writeMsgString(t MsgType, id, op string, wait int, str string) error {
+  if s.conn == nil { return errNotConnected }
+  s.wmu.Lock()
+  defer s.wmu.Unlock()
+  if _, err := s.conn.Write(MakeMsg(t, id, op, wait, len(str))); err != nil {
+    return err
+  }
+  if len(str) != 0 {
+    _, err := io.WriteString(s.conn, str)
+    return err
+  }
+  return nil
+}
+
+
 // Send a single-buffer request. A response should be received from reschan.
 func (s *Sock) SendRequest(r *Request, reschan chan Response) error {
   id := s.allocResChan(reschan)
   if err := s.writeMsg(r.MsgType, id, r.Op, 0, r.Data); err != nil {
     s.deallocResChan(id)
+    if s.closeCode != -1 {
+      return protocolError(s.closeCode)
+    }
     return err
   }
   return nil
@@ -308,6 +341,11 @@ func (s *Sock) respondOK(id string, b []byte) error {
 }
 
 
+type readDeadline interface {
+  SetReadDeadline(time.Time) error
+}
+
+
 func (s *Sock) readBufferReq(limits Limits, id, op string, size int) error {
   if limits.incBufferReq() == false {
     return s.respondRetry(size, id, limitWaitBufferReq(), "request rate limit")
@@ -320,6 +358,7 @@ func (s *Sock) readBufferReq(limits Limits, id, op string, size int) error {
     return err
   }
 
+  // Read complete payload
   inbuf := make([]byte, size)
   if _, err := readn(s.conn, inbuf); err != nil {
     limits.decBufferReq()
@@ -357,6 +396,38 @@ func (s *Sock) readBufferReq(limits Limits, id, op string, size int) error {
   return nil
 }
 
+// -----------------------------------------------------------------------------------------------
+
+type streamWriter struct {
+  s        *Sock
+  id       string
+  wroteEOS bool
+}
+
+func (w *streamWriter) Write(b []byte) (int, error) {
+  z := len(b)
+  if z == 0 {
+    w.wroteEOS = true
+  }
+  return z, w.s.writeMsg(MsgTypeStreamRes, w.id, "", 0, b)
+}
+
+func (w *streamWriter) WriteString(s string) (n int, err error) {
+  z := len(s)
+  if z == 0 {
+    w.wroteEOS = true
+  }
+  return z, w.s.writeMsgString(MsgTypeStreamRes, w.id, "", 0, s)
+}
+
+func (w *streamWriter) Close() error {
+  if !w.wroteEOS {
+    w.wroteEOS = true
+    return w.s.writeMsg(MsgTypeStreamRes, w.id, "", 0, nil)
+  }
+  return nil
+}
+
 
 func (s *Sock) readStreamReq(limits Limits, id, op string, size int) error {
   if limits.incStreamReq() == false {
@@ -385,31 +456,19 @@ func (s *Sock) readStreamReq(limits Limits, id, op string, size int) error {
   rch := s.allocReqChan(id)
   rch <- inbuf
 
-  // Create result writer
-  wroteEOS := false
-  writer := func (b []byte) error {
-    if len(b) == 0 {
-      wroteEOS = true
-    }
-    return s.writeMsg(MsgTypeStreamRes, id, "", 0, b)
-  }
-
   // Dispatch handler
   go func () {
     // TODO: recover?
-    if err := handler(s, op, rch, writer); err != nil {
+    out := &streamWriter{s, id, false}
+    if err := handler(s, op, rch, out); err != nil {
       s.deallocReqChan(id)
       if err := s.respondError(0, id, err.Error()); err != nil {
         log.Println(err)
         s.Close()
       }
     }
-    if wroteEOS == false {
-      // automatically writing EOS unless it was written by handler
-      if err := s.writeMsg(MsgTypeStreamRes, id, "", 0, nil); err != nil {
-        log.Println(err)
-        s.Close()
-      }
+    if err := out.Close(); err != nil {
+      s.Close()
     }
     limits.decStreamReq()
   }()
@@ -505,15 +564,77 @@ func (s *Sock) Handshake() error {
 
 
 var (
-  // Error returned by Read() when the other side closed the connection because 
+  ErrAbnormal    = errors.New("abnormal condition")
   ErrUnsupported = errors.New("unsupported protocol")
-  ErrInvalidMsg = errors.New("invalid protocol message")
+  ErrInvalidMsg  = errors.New("invalid protocol message")
+  ErrTimeout     = errors.New("timeout")
 )
+
+func protocolError(code int) error {
+  switch code {
+    case ProtocolErrorAbnormal:    return ErrAbnormal
+    case ProtocolErrorUnsupported: return ErrUnsupported
+    case ProtocolErrorInvalidMsg:  return ErrInvalidMsg
+    case ProtocolErrorTimeout:     return ErrTimeout
+    default: return errors.New("unknown error")
+  }
+}
+
+func (s *Sock) sendHeartbeats(stopChan chan bool) {
+  // Sleep for a very short amount of time to allow modification of HeartbeatInterval after
+  // e.g. a call to Connect
+  time.Sleep(time.Millisecond)
+  for {
+    // load is just the number of current goroutines. There has to be a more interesting "load"
+    // number to convey...
+    g := float32(runtime.NumGoroutine() - 3) / 100000.0
+    if g > 1 {
+      g = 1
+    } else if g < 0 {
+      g = 0
+    }
+    if err := s.SendHeartbeat(g); err != nil {
+      return
+    }
+    select {
+      case <-time.After(s.HeartbeatInterval): continue
+      case <-stopChan: return
+    }
+  }
+}
+
+
+func (s *Sock) SendHeartbeat(load float32) error {
+  s.wmu.Lock()
+  defer s.wmu.Unlock()
+  if s.conn == nil { return errors.New("not connected") }
+  msg := MakeHeartbeatMsg(uint16(load * float32(HeartbeatMsgMaxLoad)))
+  _, err := s.conn.Write(msg)
+  return err
+}
+
 
 // After completing a succesful handshake, call this function to read messages received to this
 // socket. Does not return until the socket is closed.
+// If HeartbeatInterval > 0 this method also sends automatic heartbeats.
 func (s *Sock) Read(limits Limits) error {
-  for {
+  readTimeout := limits.ReadTimeout()
+  hasReadDeadline := readTimeout != time.Duration(0)
+  var rd readDeadline
+
+  // Start sending heartbeats
+  var heartbeatStopChan chan bool
+  if s.HeartbeatInterval > 0 {
+    if s.HeartbeatInterval < time.Millisecond {
+      panic("HeartbeatInterval < time.Millisecond")
+    }
+    heartbeatStopChan = make(chan bool)
+    go s.sendHeartbeats(heartbeatStopChan)
+  }
+
+  var err error
+
+  readloop: for s.conn != nil {
 
     // debug: read a chunk and print it
     // b := make([]byte, 128)
@@ -528,8 +649,21 @@ func (s *Sock) Read(limits Limits) error {
     // s.CloseError(ProtocolErrorInvalidMsg)
     // return ErrInvalidMsg
 
+    // Set read timeout
+    if hasReadDeadline {
+      var ok bool
+      if rd, ok = s.conn.(readDeadline); ok {
+        readTimeoutAt := time.Now().Add(readTimeout)
+        // fmt.Printf("setting read timeout to %v  %v\n", readTimeout, readTimeoutAt)
+        if err = rd.SetReadDeadline(readTimeoutAt); err != nil {
+          panic("SetReadDeadline failed")
+        }
+      }
+    }
+
     // Read next message
-    t, id, name, wait, size, err := ReadMsg(s.conn)
+    t, id, name, wait, size, err1 := ReadMsg(s.conn)
+    err = err1
     if err == nil {
       // fmt.Printf("Read: msg: t=%c  id=%q  name=%q  size=%v\n", byte(t), id, name, size)
 
@@ -549,33 +683,41 @@ func (s *Sock) Read(limits Limits) error {
         case MsgTypeNotification:
           err = s.readNotification(name, int(size))
 
-        case MsgTypeProtocolError:
-          code := size
-          s.Close()
-          if code == ProtocolErrorUnsupported {
-            return ErrUnsupported
-          } else {
-            return ErrInvalidMsg
+        case MsgTypeHeartbeat:
+          if s.OnHeartbeat != nil {
+            s.OnHeartbeat(int(wait), time.Unix(int64(size), 0))
           }
 
-        default:
+        case MsgTypeProtocolError:
+          code := int(size)
+          s.closeCode = code
           s.Close()
-          return ErrInvalidMsg
+          err = protocolError(code)
+          break readloop
+
+        default:
+          s.CloseError(ProtocolErrorInvalidMsg)
+          err = ErrInvalidMsg
+          break readloop
       }
     }
 
     if err != nil {
       if err == io.EOF {
         s.Close()
+      } else if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+        s.CloseError(ProtocolErrorTimeout)
       } else {
         s.CloseError(ProtocolErrorInvalidMsg)
       }
-      return err
     }
   }
 
-  // never reached
-  return nil
+  if heartbeatStopChan != nil {
+    heartbeatStopChan <- true
+  }
+
+  return err
 }
 
 
@@ -593,9 +735,10 @@ func (s *Sock) Addr() string {
 // Close this socket because of a protocol error
 func (s *Sock) CloseError(code int) error {
   if s.conn != nil {
+    s.closeCode = code
     s.wmu.Lock()
-    defer s.wmu.Unlock()
     s.conn.Write(MakeMsg(MsgTypeProtocolError, "", "", 0, code))
+    s.wmu.Unlock()
     return s.Close()
   }
   return nil
@@ -608,7 +751,7 @@ func (s *Sock) Close() error {
     err := s.conn.Close()
     s.conn = nil
     if s.CloseHandler != nil {
-      s.CloseHandler(s)
+      s.CloseHandler(s, s.closeCode)
     }
     return err
   }

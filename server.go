@@ -4,6 +4,7 @@ import (
   "os"
   "os/signal"
   "syscall"
+  "time"
 )
 
 
@@ -24,10 +25,17 @@ type Server struct {
   // meaning no messages will be received on the socket until this function returns.
   AcceptHandler SockHandler
 
+  // Template value for accepted sockets. Defaults to 0 (no automatic heartbeats)
+  HeartbeatInterval time.Duration
+
+  // Template value for accepted sockets. Defaults to nil
+  OnHeartbeat func(load int, t time.Time)
+
   listener net.Listener
 }
 
 
+// Create a new server already listening on `l`
 func NewServer(h *Handlers, limits Limits, l net.Listener) *Server {
   return &Server{Handlers:h, Limits:limits, listener:l}
 }
@@ -91,6 +99,8 @@ func (s *Server) accept(c net.Conn) {
     if s.AcceptHandler != nil {
       s.AcceptHandler(s2)
     }
+    s2.HeartbeatInterval = s.HeartbeatInterval
+    s2.OnHeartbeat = s.OnHeartbeat
     s2.Read(s.Limits)
   }
 }

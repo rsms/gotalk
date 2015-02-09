@@ -8,18 +8,27 @@ import (
   "strings"
   "io"
   "strconv"
-  // "path"
+  "time"
 )
 
 type WebSocketServer struct {
   Limits
   Handlers *Handlers
   OnAccept SockHandler
+
+  // Template value for accepted sockets. Defaults to 0 (no automatic heartbeats)
+  HeartbeatInterval time.Duration
+
+  // Template value for accepted sockets. Defaults to nil
+  OnHeartbeat func(load int, t time.Time)
+
   Server   *websocket.Server
 }
 
+const gotalkJSSuffix = "/gotalk.js"
+
 func (s *WebSocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-  if strings.HasSuffix(r.URL.Path, "/js") {
+  if strings.HasSuffix(r.URL.Path, gotalkJSSuffix) {
     // serve javascript library
     reqETag := r.Header["If-None-Match"]
     w.Header()["Cache-Control"] = []string{"public, max-age=300"}
@@ -31,7 +40,8 @@ func (s *WebSocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       w.WriteHeader(http.StatusNotModified)
     } else {
       w.Header()["Content-Type"] = []string{"text/javascript"}
-      serveURL := "window.gotalkResponderAt={ws:'"+r.URL.Path[:len(r.URL.Path)-2]+"'};"
+      wsPath := r.URL.Path[:len(r.URL.Path)-len(gotalkJSSuffix)+1]
+      serveURL := "window.gotalkResponderAt={ws:'"+wsPath+"'};"
       sizeStr := strconv.FormatInt(int64(len(serveURL) + len(gotalkjs.BrowserLibString)), 10)
       w.Header()["Content-Length"] = []string{sizeStr}
       w.WriteHeader(http.StatusOK)
@@ -75,6 +85,8 @@ func WebSocketHandler() *WebSocketServer {
       if server.OnAccept != nil {
         server.OnAccept(s)
       }
+      s.HeartbeatInterval = server.HeartbeatInterval
+      s.OnHeartbeat = server.OnHeartbeat
       s.Read(server.Limits)
     }
   }

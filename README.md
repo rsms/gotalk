@@ -179,7 +179,7 @@ In our html document, we begin by registering any operations we can handle:
 ```html
 <!-- index.html -->
 <body>
-<script type="text/javascript" src="/gotalk/js"></script>
+<script type="text/javascript" src="/gotalk/gotalk.js"></script>
 <script>
 gotalk.handle('greet', function (params, result) {
   result({ greeting: 'Hello ' + params.name });
@@ -187,14 +187,14 @@ gotalk.handle('greet', function (params, result) {
 </script>
 ```
 
-Notice how we load a JavaScript from "/gotalk/js" — a gotalk web socket server embeds a matching web browser JS library which it returns from `{path where gotalk web socket is mounted}/js`. It uses Etag cache validation, so you shouldn't need to think about "cache busting" the URL.
+Notice how we load a JavaScript from "/gotalk/gotalk.js" — a gotalk web socket server embeds a matching web browser JS library which it returns from `{path where gotalk web socket is mounted}/gotalk.js`. It uses Etag cache validation, so you shouldn't need to think about "cache busting" the URL.
 
-We can't "listen & accept" connections in a web browser, but we can "connect" so we do just that, connecting to "/gotalk" which is where we registered `gotalk.WebSocketHandler` in our server.
+We can't "listen & accept" connections in a web browser, but we can "connect" so we do just that:
 
 ```html
 <!-- index.html -->
 <body>
-<script type="text/javascript" src="/gotalk/js"></script>
+<script type="text/javascript" src="/gotalk/gotalk.js"></script>
 <script>
 gotalk.handle('greet', function (params, result) {
   result({ greeting: 'Hello ' + params.name });
@@ -263,6 +263,7 @@ Here's a complete description of the protocol:
     ErrorResult     = "E" requestID payload
     RetryResult     = "e" requestID wait payload
     Notification    = "n" name payload
+    Heartbeat       = "h" load time
     ProtocolError   = "f" code
 
     requestID       = <byte> <byte> <byte> <byte>
@@ -271,6 +272,8 @@ Here's a complete description of the protocol:
     name            = text3
     wait            = hexUInt8
     code            = hexUInt8
+    time            = hexUInt8
+    load            = hexUInt4
 
     text3           = text3Size text3Value
     text3Size       = hexUInt3
@@ -281,6 +284,7 @@ Here's a complete description of the protocol:
     payloadData     = <byte>{payloadSize}
 
     hexUInt3        = <hexdigit> <hexdigit> <hexdigit>
+    hexUInt4        = <hexdigit> <hexdigit> <hexdigit> <hexdigit>
     hexUInt8        = <hexdigit> <hexdigit> <hexdigit> <hexdigit>
                       <hexdigit> <hexdigit> <hexdigit> <hexdigit>
 
@@ -370,10 +374,12 @@ If the protocol communication itself experiences issues—e.g. an illegal messag
 
 **ProtocolError codes:**
 
-|  Code | Meaning          |
-| ----: | ---------------- |
-|     1 | Unsupported      |
-|     2 | Invalid message  |
+|  Code | Meaning              | Comments
+| ----: | -------------------- | -----------------------------------------------------------------
+|     0 | Abnormal             | Closed because of an abnormal condition (e.g. server fault, etc)
+|     1 | Unsupported protocol | The other side does not support the callers protocol
+|     2 | Invalid message      | An invalid message was transmitted
+|     3 | Timeout              | The other side closed the connection because communicating took too long
 
 Example of a peer which does not support the version of the protocol spoken by the sender:
 
@@ -462,6 +468,23 @@ n00cchat message0000002e{"message":"Hi","from":"nthn","room":"gonuts"}
 ```
 
 Notifications are never replied to nor can they cause "error" results. Applications needing acknowledgement of notification delivery might consider using a request instead.
+
+
+### Heartbeats
+
+Because most responders will limit the time it waits for reads, a heartbeat message is send at a certain interval. When a heartbeat is sent is up to the implementation.
+
+A heartbeat contains the sender's local time in the form of an unsigned 32-bit UNIX timestamp. This is enought to cover usage until 2106. I really hope gotalk is nowhere to be found in 2106.
+
+It also contains an optional "load" value, indicating how pressured, or under what load, the sender is. 0 means "idle" and 65535 (0xffff) means "omg I think I'm dying." This can be used to distribute work to less loaded responders in a load-balancing setup.
+
+```py
++------------------ Heartbeat
+|   +--------- load 2
+|   |       +- time 2015-02-08 22:09:30 UTC
+|   |       |
+h000254d7de9a
+```
 
 
 ### Notes

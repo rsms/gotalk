@@ -6,6 +6,7 @@ import (
   "errors"
   "encoding/binary"
   "bytes"
+  "time"
 )
 
 const (
@@ -21,12 +22,15 @@ const (
   MsgTypeErrorRes      = MsgType(byte('E'))
   MsgTypeRetryRes      = MsgType(byte('e'))
   MsgTypeNotification  = MsgType(byte('n'))
+  MsgTypeHeartbeat     = MsgType(byte('h'))
   MsgTypeProtocolError = MsgType(byte('f'))
 )
 
 const (
+  ProtocolErrorAbnormal    = 0
   ProtocolErrorUnsupported = 1
   ProtocolErrorInvalidMsg  = 2
+  ProtocolErrorTimeout     = 3
 )
 
 // Protocol message type
@@ -52,6 +56,21 @@ func ReadVersion(s io.Reader) (uint8, error) {
     return 0, errors.New("unsupported protocol version \"" + string(b) + "\"")
   }
   return uint8(n), nil
+}
+
+
+// Maximum value of a heartbeat's "load"
+var HeartbeatMsgMaxLoad = 0xffff
+
+
+// Create a slice of bytes representing a heartbeat message
+func MakeHeartbeatMsg(load uint16) []byte {
+  b := []byte{byte(MsgTypeHeartbeat),0,0,0,0,0,0,0,0,0,0,0,0}
+  z := 1
+  copyFixnum(b[z:z+4], 4, uint64(load), 16)
+  z += 4
+  copyFixnum(b[z:z+8], 8, uint64(time.Now().UTC().Unix()), 16)
+  return b
 }
 
 
@@ -115,93 +134,100 @@ func MakeMsg(t MsgType, id, name3 string, wait, size int) []byte {
 
 
 // Read a message from `s`
+// If t is MsgTypeHeartbeat, wait==load, size==time
 func ReadMsg(s io.Reader) (t MsgType, id, name3 string, wait, size uint32, err error) {
   // "r0001004echo00000005"  => ('r', "0001", "echo", 0, 5, nil)
   // "R000100000005"         => ('R', "0001", "", 0, 5, nil)
   // "e00010000138800000014" => ('e', "0001", "", 5000, 20, nil)
-  for {
-    b := make([]byte, 128)
+  b := make([]byte, 128)
 
-    // A message has a minimum size of 13, so read first 13 bytes
-    // e.g. "n001a00000000" = <notification> <short name> <no payload>
-    readz := 13
-    readz, err = readn(s, b[:readz])
+  // A message has a minimum size of 13, so read first 13 bytes
+  // e.g. "n001a00000000" = <notification> <short name> <no payload>
+  readz := 13
+  readz, err = readn(s, b[:readz])
+  if err != nil {
+    if err == io.EOF && readz >= 9 && b[0] == byte(MsgTypeProtocolError) {
+      // OK to read until EOF for MsgTypeProtocolError as they are shorter than other messages
+      err = nil
+    } else {
+      return
+    }
+  }
+
+  // type
+  t = MsgType(b[0])
+  z := 1
+
+  if t == MsgTypeHeartbeat {
+    // load
+    var n uint64
+    n, err = strconv.ParseUint(string(b[z:z+4]), 16, 16)
+    z += 4
     if err != nil {
-      if err == io.EOF && readz >= 9 && b[0] == byte(MsgTypeProtocolError) {
-        // OK to read until EOF for MsgTypeProtocolError as they are shorter than other messages
-        err = nil
-      } else {
-        break
+      return
+    }
+    wait = uint32(n)
+
+  } else if t != MsgTypeNotification && t != MsgTypeProtocolError {
+    // requestID
+    id = string(b[z:z+4])
+    z += 4
+  }
+
+  if t == MsgTypeSingleReq || t == MsgTypeStreamReq || t == MsgTypeNotification {
+    // name
+    // text3Size
+    name3z, e := strconv.ParseUint(string(b[z:z+3]), 16, 16)
+    z += 3
+    if e != nil {
+      err = e
+      return
+    }
+
+    // Read remainder of message
+    newz := z + int(name3z) + 8  // 8 = payload size
+
+    if cap(b) < newz {
+      // Grow buffer (only happens with really long name3)
+      newb := make([]byte, newz)
+      copy(newb, b)
+      b = newb
+    }
+
+    if newz > readz {
+      if _, err = readn(s, b[readz:newz]); err != nil {
+        return
       }
     }
 
-    // type
-    t = MsgType(b[0])
-    z := 1
+    // text3Value
+    name3 = string(b[z:z+int(name3z)])
+    z += int(name3z)
 
-    if t != MsgTypeNotification && t != MsgTypeProtocolError {
-      // requestID
-      id = string(b[z:z+4])
-      z += 4
-    }
-
-    if t == MsgTypeSingleReq || t == MsgTypeStreamReq || t == MsgTypeNotification {
-      // name
-      // text3Size
-      name3z, e := strconv.ParseUint(string(b[z:z+3]), 16, 16)
-      z += 3
-      if e != nil {
-        err = e
-        break
-      }
-
-      // Read remainder of message
-      newz := z + int(name3z) + 8  // 8 = payload size
-
-      if cap(b) < newz {
-        // Grow buffer (only happens with really long name3)
-        newb := make([]byte, newz)
-        copy(newb, b)
-        b = newb
-      }
-
-      if newz > readz {
-        if _, err = readn(s, b[readz:newz]); err != nil {
-          break
-        }
-      }
-
-      // text3Value
-      name3 = string(b[z:z+int(name3z)])
-      z += int(name3z)
-
-    } else if t == MsgTypeRetryRes {
-      // wait
-      n, e := strconv.ParseUint(string(b[z:z+8]), 16, 32)
-      if e != nil {
-        err = e
-        break
-      }
-      wait = uint32(n)
-      z += 8
-      // read remainding 8 bytes of the message
-      if _, err = readn(s, b[z:z+8]); err != nil {
-        break
-      }
-    }
-
-    // payloadSize
+  } else if t == MsgTypeRetryRes {
+    // wait
     n, e := strconv.ParseUint(string(b[z:z+8]), 16, 32)
     if e != nil {
       err = e
-      break
+      return
     }
-    size = uint32(n)
-
-    break
+    wait = uint32(n)
+    z += 8
+    // read remainding 8 bytes of the message
+    if _, err = readn(s, b[z:z+8]); err != nil {
+      return
+    }
   }
 
-  return t, id, name3, wait, size, err
+  // payloadSize (or time if t==MsgTypeHeartbeat)
+  n, e := strconv.ParseUint(string(b[z:z+8]), 16, 32)
+  if e != nil {
+    err = e
+    return
+  }
+  size = uint32(n)
+
+  return
 }
 
 
@@ -257,8 +283,8 @@ func rShiftSlice(b []byte, n int, padb byte) {
 
 
 // Read exactly len(b) bytes from s, blocking if needed
-// TODO: is there already a function like this in the io package?
 func readn(s io.Reader, b []byte) (int, error) {
+  // behaves similar to io.ReadFull, but simpler and allowing EOF<len(b)
   p := 0
   n := len(b)
   for p < n {

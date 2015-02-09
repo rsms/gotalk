@@ -29,6 +29,7 @@ function Sock(handlers) { return Object.create(Sock.prototype, {
   // Public properties
   handlers:      {value:handlers, enumerable:true},
   protocol:      {value: Buf ? protocol.binary : protocol.text, enumerable:true, writable:true},
+  heartbeatInterval: {value: 20 * 1000, enumerable:true, writable:true},
 
   // Internal
   ws:            {value:null, writable:true},
@@ -36,6 +37,7 @@ function Sock(handlers) { return Object.create(Sock.prototype, {
 
   // Used for performing requests
   nextOpID:      {value:0, writable:true},
+  nextStreamID:  {value:0, writable:true},
   pendingRes:    {value:{}, writable:true},
   hasPendingRes: {get:function(){ for (var k in this.pendingRes) { return true; } }},
 
@@ -121,7 +123,7 @@ Sock.prototype.end = function() {
   if (!s.pendingClose && s.hasPendingRes) {
     s.pendingClose = true;
   } else if (s.ws) {
-    s.ws.close();
+    s.ws.close(1000);
   }
 };
 
@@ -137,6 +139,9 @@ Sock.prototype.address = function() {
 // ===============================================================================================
 // Reading messages from a connection
 
+var ErrAbnormal = exports.ErrAbnormal = Error("unsupported protocol");
+ErrAbnormal.isGotalkProtocolError = true;
+ErrAbnormal.code = protocol.ErrorAbnormal;
 
 var ErrUnsupported = exports.ErrUnsupported = Error("unsupported protocol");
 ErrUnsupported.isGotalkProtocolError = true;
@@ -145,6 +150,43 @@ ErrUnsupported.code = protocol.ErrorUnsupported;
 var ErrInvalidMsg = exports.ErrInvalidMsg = Error("invalid protocol message");
 ErrInvalidMsg.isGotalkProtocolError = true;
 ErrInvalidMsg.code = protocol.ErrorInvalidMsg;
+
+var ErrTimeout = exports.ErrTimeout = Error("timeout");
+ErrTimeout.isGotalkProtocolError = true;
+ErrTimeout.code = protocol.ErrorTimeout;
+
+
+Sock.prototype.sendHeartbeat = function (load) {
+  var s = this, buf = s.protocol.makeHeartbeatMsg(Math.round(load * protocol.HeartbeatMsgMaxLoad));
+  try {
+    s.ws.send(buf);
+  } catch (err) {
+    if (!this.ws || this.ws.readyState > WebSocket.OPEN) {
+      err = new Error('socket is closed');
+    }
+    throw err;
+  }
+};
+
+
+Sock.prototype.startSendingHeartbeats = function() {
+  var s = this;
+  if (s.heartbeatInterval < 10) {
+    throw new Error("Sock.heartbeatInterval is too low");
+  }
+  clearTimeout(s._sendHeartbeatsTimer);
+  var send = function() {
+    clearTimeout(s._sendHeartbeatsTimer);
+    s.sendHeartbeat(0);
+    s._sendHeartbeatsTimer = setTimeout(send, s.heartbeatInterval);
+  };
+  s._sendHeartbeatsTimer = setTimeout(send, 1);
+};
+
+
+Sock.prototype.stopSendingHeartbeats = function() {
+  clearTimeout(s._sendHeartbeatsTimer);
+};
 
 
 Sock.prototype.startReading = function () {
@@ -160,13 +202,17 @@ Sock.prototype.startReading = function () {
     // );
     if (msg.t === protocol.MsgTypeProtocolError) {
       var errcode = msg.size;
-      if (errcode === protocol.ErrorUnsupported) {
+      if (errcode === protocol.ErrorAbnormal) {
+        ws._gotalkCloseError = ErrAbnormal;
+      } else if (errcode === protocol.ErrorUnsupported) {
         ws._gotalkCloseError = ErrUnsupported;
+      } else if (errcode === protocol.ErrorTimeout) {
+        ws._gotalkCloseError = ErrTimeout;
       } else {
         ws._gotalkCloseError = ErrInvalidMsg;
       }
       ws.close(4000 + errcode);
-    } else if (msg.size !== 0) {
+    } else if (msg.size !== 0 && msg.t !== protocol.MsgTypeHeartbeat) {
       ws.onmessage = readMsgPayload;
     } else {
       s.handleMsg(msg);
@@ -189,6 +235,9 @@ Sock.prototype.startReading = function () {
       s.closeError(protocol.ErrorUnsupported);
     } else {
       ws.onmessage = readMsg;
+      if (s.heartbeatInterval > 0) {
+        s.startSendingHeartbeats();
+      }
     }
   }
 
@@ -211,8 +260,10 @@ Sock.prototype.handleMsg = function(msg, payload) {
   // console.log('handleMsg:', String.fromCharCode(msg.t), msg, 'payload:', payload);
   var msgHandler = msgHandlers[msg.t];
   if (!msgHandler) {
-    ws._gotalkCloseError = ErrInvalidMsg;
-    s.closeError(protocol.ErrInvalidMsg);
+    if (s.ws) {
+      s.ws._gotalkCloseError = ErrInvalidMsg;
+    }
+    s.closeError(protocol.ErrorInvalidMsg);
   } else {
     msgHandler.call(this, msg, payload);
   }
@@ -223,11 +274,11 @@ msgHandlers[protocol.MsgTypeSingleReq] = function (msg, payload) {
   handler = s.handlers.findRequestHandler(msg.name);
 
   result = function (outbuf) {
-    s.sendMsg(protocol.MsgTypeSingleRes, msg.id, null, outbuf);
+    s.sendMsg(protocol.MsgTypeSingleRes, msg.id, null, 0, outbuf);
   };
   result.error = function (err) {
     var errstr = err.message || String(err);
-    s.sendMsg(protocol.MsgTypeErrorRes, msg.id, null, errstr);
+    s.sendMsg(protocol.MsgTypeErrorRes, msg.id, null, 0, errstr);
   };
 
   if (typeof handler !== 'function') {
@@ -245,21 +296,24 @@ msgHandlers[protocol.MsgTypeSingleReq] = function (msg, payload) {
 function handleRes(msg, payload) {
   var id = typeof msg.id === 'string' ? msg.id : msg.id.toString();
   var s = this, callback = s.pendingRes[id];
-  delete s.pendingRes[id];
+  if (msg.t !== protocol.MsgTypeStreamRes || !payload || (payload.length || payload.size) === 0) {
+    delete s.pendingRes[id];
+    if (s.pendingClose && !s.hasPendingRes) {
+      s.end();
+    }
+  }
   if (typeof callback !== 'function') {
     return; // ignore message
   }
-  if (s.pendingClose && !s.hasPendingRes) {
-    s.end();
-  }
-  if (msg.t === protocol.MsgTypeSingleRes) {
-    callback(null, payload);
-  } else {
+  if (msg.t === protocol.MsgTypeErrorRes) {
     callback(new Error(String(payload)), null);
+  } else {
+    callback(null, payload);
   }
 }
 
 msgHandlers[protocol.MsgTypeSingleRes] = handleRes;
+msgHandlers[protocol.MsgTypeStreamRes] = handleRes;
 msgHandlers[protocol.MsgTypeErrorRes] = handleRes;
 
 msgHandlers[protocol.MsgTypeNotification] = function (msg, payload) {
@@ -269,16 +323,20 @@ msgHandlers[protocol.MsgTypeNotification] = function (msg, payload) {
   }
 };
 
+msgHandlers[protocol.MsgTypeHeartbeat] = function (msg) {
+  this.emit('heartbeat', {time:new Date(msg.size * 1000), load:msg.wait});
+};
+
 // ===============================================================================================
 // Sending messages
 
 
-Sock.prototype.sendMsg = function(t, id, name, payload) {
+Sock.prototype.sendMsg = function(t, id, name, wait, payload) {
   var payloadSize = (payload && typeof payload === 'string' && this.protocol === protocol.binary) ?
     utf8.sizeOf(payload) :
-    payload ? payload.length :
+    payload ? payload.length || payload.size :
     0;
-  var s = this, buf = s.protocol.makeMsg(t, id, name, payloadSize);
+  var s = this, buf = s.protocol.makeMsg(t, id, name, wait, payloadSize);
   // console.log('sendMsg(',t,id,name,payload,'): protocol.makeMsg =>',
   //   typeof buf === 'string' ? buf : buf.toString());
   try {
@@ -296,11 +354,13 @@ Sock.prototype.sendMsg = function(t, id, name, payload) {
 
 
 Sock.prototype.closeError = function(code) {
-  try {
-    var s = this, buf = s.protocol.makeMsg(protocol.MsgTypeProtocolError, null, null, code);
-    s.ws.send(buf);
-  } catch (e) {}
-  ws.close(4000 + code);
+  var s = this, buf;
+  if (s.ws) {
+    try {
+      s.ws.send(s.protocol.makeMsg(protocol.MsgTypeProtocolError, null, null, 0, code));
+    } catch (e) {}
+    s.ws.close(4000 + code);
+  }
 };
 
 var zeroes = '0000';
@@ -314,9 +374,10 @@ Sock.prototype.bufferRequest = function(op, buf, callback) {
   }
   id = id.toString(36);
   id = zeroes.substr(0, 4 - id.length) + id;
+
   s.pendingRes[id] = callback;
   try {
-    s.sendMsg(protocol.MsgTypeSingleReq, id, op, buf);
+    s.sendMsg(protocol.MsgTypeSingleReq, id, op, 0, buf);
   } catch (err) {
     delete s.pendingRes[id];
     callback(err);
@@ -325,7 +386,7 @@ Sock.prototype.bufferRequest = function(op, buf, callback) {
 
 
 Sock.prototype.bufferNotify = function(name, buf) {
-  s.sendMsg(protocol.MsgTypeNotification, null, name, buf);
+  s.sendMsg(protocol.MsgTypeNotification, null, name, 0, buf);
 }
 
 
@@ -347,6 +408,66 @@ Sock.prototype.request = function(op, value, callback) {
 Sock.prototype.notify = function(op, value) {
   var buf = JSON.stringify(value);
   return this.bufferNotify(op, buf);
+};
+
+
+// ===============================================================================================
+
+// Represents a stream request.
+// Response(s) arrive by the "data"(buf) event. When the response is complete, a "end"(error)
+// event is emitted, where error is non-empty if the request failed.
+var StreamRequest = function(s, op, id) {
+  return Object.create(StreamRequest.prototype, {
+    s:          {value:s},
+    op:         {value:op, enumerable:true},
+    id:         {value:id, enumerable:true},
+    onresponse: {value:function(){}, enumerable:true, write:true}
+  });
+};
+
+EventEmitter.mixin(StreamRequest.prototype);
+
+StreamRequest.prototype.write = function (buf) {
+  if (!this.ended) {
+    if (!this.started) {
+      this.started = true;
+      this.s.sendMsg(protocol.MsgTypeStreamReq, this.id, this.op, 0, buf);
+    } else {
+      this.s.sendMsg(protocol.MsgTypeStreamReqPart, this.id, null, 0, buf);
+    }
+    if (!buf || buf.length === 0 || buf.size === 0) {
+      this.ended = true;
+    }
+  }
+};
+
+// Finalize the request
+StreamRequest.prototype.end = function () {
+  this.write(null);
+};
+
+Sock.prototype.streamRequest = function(op) {
+  var s = this, id = s.nextStreamID++;
+  if (s.nextStreamID === 46656) {
+    // limit for base36 within 3 digits (36^3=46656)
+    s.nextStreamID = 0;
+  }
+  id = id.toString(36);
+  id = '!' + zeroes.substr(0, 3 - id.length) + id;
+
+  var req = StreamRequest(s, op, id);
+
+  s.pendingRes[id] = function (err, buf) {
+    if (err) {
+      req.emit('end', err);
+    } else if (!buf || buf.length === 0) {
+      req.emit('end', null);
+    } else {
+      req.emit('data', buf);
+    }
+  };
+
+  return req;
 };
 
 

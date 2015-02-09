@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <script type="text/javascript" src="/gotalk/js"></script>
+    <script type="text/javascript" src="/gotalk/gotalk.js"></script>
   </head>
   <body>
     <script>
@@ -10,7 +10,7 @@
 var s = gotalk.connection()
   .on('open', function () {
     s.request('echo', 'hello', function (err, result) {
-      if (err) return console.error(err);
+      if (err) return console.error(err.stack || err);
       console.log('echo:', result);
     });
   })

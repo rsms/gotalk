@@ -4,6 +4,7 @@ import (
   "errors"
   "sync"
   "encoding/json"
+  "io"
 )
 
 type Handlers struct {
@@ -33,8 +34,7 @@ type BufferReqHandler   func(s *Sock, op string, payload []byte) ([]byte, error)
 type BufferNoteHandler  func(s *Sock, name string, payload []byte)
 
 // EOS when <-rch==nil
-type StreamReqHandler   func(s *Sock, name string, rch chan []byte, write StreamWriter) error
-type StreamWriter       func([]byte) error
+type StreamReqHandler   func(s *Sock, name string, rch chan []byte, out io.WriteCloser) error
 
 var DefaultHandlers = NewHandlers()
 
@@ -251,9 +251,9 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
 
   var in0IsSockPtr bool
   var sockPtrToValue sockPtrToValueFunc
-  if fnt.NumIn() > 1 {
+  if fnt.NumIn() > 0 {
     in0IsSockPtr, sockPtrToValue = typeIsSockPtr(fnt.In(0))
-    if in0IsSockPtr == false {
+    if in0IsSockPtr == false && fnt.NumIn() > 1 {
       panic(errMsgBadHandler)
     }
   }
