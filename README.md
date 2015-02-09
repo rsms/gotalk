@@ -1,34 +1,3 @@
-# Branch "v1"
-
-This branch houses the development of version 1 of the protocol and implementations.
-
-- **Learn from using the draft v0 protocol**
-  - Found there needs to be a distinction between an error which was caused by a faulty request and an error caused by a temporarily faulty responder.
-    - Essentially:
-      - Requestors should retry a request when the responder has a temporary fault (e.g. service restarting, internal database connection error.)
-      - Requestors must not retry a request that's faulty itself (e.g. missing parameters, not authenticated.)
-    - v1 introduces a new error response: `RetryResult`
-      - A requestor receiving a RetryResult conditionally retries the request (see details in readme's protocol docs.)
-  - Rate and resource limiting must be implemented in the libraries
-    - A `Limits` component is introduced which enabled control over request concurrency
-    - Still need to figure out: Should we add high-level functionality to rate-limit individual connections, or should we leave that to application code (to i.e. assign custom Limits to Socks) ?
-    - Responders reply to rate 
-  - We might need to add timeouts (read, write, handle). See [http.Server](https://golang.org/src/net/http/server.go#L1611)
-  - Go package's `Server` should handle temporary errors. See [http.Serve](https://golang.org/src/net/http/server.go#L1724) for an idea of how.
-  - We might want to add a "status" protocol message which can be used to implement things like token-ring load balancing and simple heartbeats. It should make use of at least 12 bytes (apart from type byte) to not increase complexity of protocol implementations.
-- **Protocol changes:**
-  - `requestID` is now 4 bytes, making it easier to produce from a 32-bit integer
-  - New message type `RetryResult`
-- **Go package:**
-  - Isolate and handle recoverable errors in handlers
-  - Do not dispatch goroutines for single-buffer handlers
-    - Adds flexibility and makes it possible to implement serialization (in the app layer)
-    - Need to change the API for single-buffer handler type `BufferReqHandler` to take a "reply writer" of some kind (maybe a chan) rather than returning a buf, which would no longer be possible.
-    - Question: Is it worth the work, added code complexity? Is there a performance impact for the common case?
-- **JavaScript package:**
-  - Provide "stay connected" functionality as it's a very common thing to want to do in web browser applications.
-
-
 # gotalk
 
 [Gotalk](https://github.com/rsms/gotalk) exists to make it easy for programs to *talk with one another over the internet*, like a web app coordinating with a web server, or a bunch of programs dividing work amongst eachother.
