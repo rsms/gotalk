@@ -24,9 +24,10 @@ func responder(port string) {
   }
 
   // Configure limits with a read timeout of one second
-  s.Limits = gotalk.NewLimits(0, 0, time.Second)
+  s.Limits = gotalk.NewLimits(0, 0)
+  s.Limits.SetReadTimeout(time.Second)
 
   // Accept connections
-  println("listening at", s.Addr())
+  println("responder: listening at", s.Addr())
   go s.Accept()
 }

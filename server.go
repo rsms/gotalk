@@ -41,13 +41,34 @@ func NewServer(h *Handlers, limits Limits, l net.Listener) *Server {
 }
 
 
+type tcpKeepAliveListener struct {
+  *net.TCPListener
+}
+
+func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
+  tc, err := ln.AcceptTCP()
+  if err != nil {
+    return
+  }
+  tc.SetKeepAlive(true)
+  tc.SetKeepAlivePeriod(30 * time.Second)
+  return tc, nil
+}
+
+
 // Start a `how` server listening for connections at `addr`. You need to call Accept() on the
-// returned socket to start accepting connections.
-// The returned server has Handlers=DefaultHandlers and Limits=DefaultLimits.
+// returned socket to start accepting connections. `how` and `addr` are passed to `net.Listen()`
+// and thus any values accepted by net.Listen are valid.
+// The returned server has Handlers=DefaultHandlers and Limits=DefaultLimits set.
 func Listen(how, addr string) (*Server, error) {
   l, err := net.Listen(how, addr)
   if err != nil {
     return nil, err
+  }
+
+  if tcpl, ok := l.(*net.TCPListener); ok {
+    // Wrap TCP listener to enable TCP keep-alive
+    l = &tcpKeepAliveListener{tcpl}
   }
 
   s := NewServer(DefaultHandlers, DefaultLimits, l)
@@ -83,10 +104,23 @@ func Serve(how, addr string, acceptHandler SockHandler) error {
 
 // Accept connections. Blocks until Close() is called or an error occurs.
 func (s *Server) Accept() error {
+  var tempDelay time.Duration // how long to sleep on accept failure
   for {
-    c, err := s.listener.Accept()
-    if err != nil {
-      return err
+    c, e := s.listener.Accept()
+    if e != nil {
+      if ne, ok := e.(net.Error); ok && ne.Temporary() {
+        if tempDelay == 0 {
+          tempDelay = 5 * time.Millisecond
+        } else {
+          tempDelay *= 2
+        }
+        if max := 1 * time.Second; tempDelay > max {
+          tempDelay = max
+        }
+        time.Sleep(tempDelay)
+        continue
+      }
+      return e
     }
     go s.accept(c)
   }

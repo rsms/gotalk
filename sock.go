@@ -614,6 +614,11 @@ func (s *Sock) SendHeartbeat(load float32) error {
 }
 
 
+type netLocalAddressable interface {
+  LocalAddr() net.Addr
+}
+
+
 // After completing a succesful handshake, call this function to read messages received to this
 // socket. Does not return until the socket is closed.
 // If HeartbeatInterval > 0 this method also sends automatic heartbeats.
@@ -622,9 +627,16 @@ func (s *Sock) Read(limits Limits) error {
   hasReadDeadline := readTimeout != time.Duration(0)
   var rd readDeadline
 
+  // Pipes doesn't support deadlines
+  netaddr, ok := s.conn.(netLocalAddressable)
+  isPipe := ok && netaddr.LocalAddr().Network() == "pipe"
+  if hasReadDeadline && isPipe {
+    hasReadDeadline = false
+  }
+
   // Start sending heartbeats
   var heartbeatStopChan chan bool
-  if s.HeartbeatInterval > 0 {
+  if s.HeartbeatInterval > 0 && !isPipe {
     if s.HeartbeatInterval < time.Millisecond {
       panic("HeartbeatInterval < time.Millisecond")
     }
@@ -656,7 +668,7 @@ func (s *Sock) Read(limits Limits) error {
         readTimeoutAt := time.Now().Add(readTimeout)
         // fmt.Printf("setting read timeout to %v  %v\n", readTimeout, readTimeoutAt)
         if err = rd.SetReadDeadline(readTimeoutAt); err != nil {
-          panic("SetReadDeadline failed")
+          panic("SetReadDeadline failed: " + err.Error())
         }
       }
     }

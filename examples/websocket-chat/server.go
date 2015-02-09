@@ -48,7 +48,7 @@ func onAccept(s *gotalk.Sock) {
   defer socksmu.Unlock()
   socks[s] = 1
 
-  s.CloseHandler = func (s *gotalk.Sock) {
+  s.CloseHandler = func (s *gotalk.Sock, _ int) {
     socksmu.Lock()
     defer socksmu.Unlock()
     delete(socks, s)

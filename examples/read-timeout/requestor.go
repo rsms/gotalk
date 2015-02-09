@@ -49,7 +49,7 @@ func sendRequest(s *gotalk.Sock) {
 func timeoutRequest(port string) {
   s, err := gotalk.Connect("tcp", "localhost:"+port)
   if err != nil { panic(err) }
-  println("connected to", s.Addr())
+  println("requestor: connected to", s.Addr())
 
   // Wrap the connection for slow writing to simulate a poor connection
   s.Adopt(&slowWriter{s.Conn(), 2 * time.Second})
@@ -64,7 +64,7 @@ func timeoutRequest(port string) {
 func heartbeatKeepAlive(port string) {
   s, err := gotalk.Connect("tcp", "localhost:"+port)
   if err != nil { panic(err) }
-  println("connected to", s.Addr())
+  println("requestor: connected to", s.Addr())
 
   // As the responder has a one second timeout, set our heartbeat interval to half that time
   s.HeartbeatInterval = 500 * time.Millisecond

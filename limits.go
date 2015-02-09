@@ -7,7 +7,9 @@ import (
 
 type Limits interface {
   // Maximum amount of time allowed to read a buffer request. 0 = no timeout.
+  // Defaults to 30 seconds.
   ReadTimeout() time.Duration
+  SetReadTimeout(time.Duration)
 
   incBufferReq() bool
   decBufferReq()
@@ -25,8 +27,6 @@ type Limits interface {
 // and we are currently processing 5 streaming requests, we can handle an additional 5 buffered
 // requests, but no more streaming requests.
 //
-// `readTimeout` limits the amount of time that can be spent reading a single buffer request.
-//
 // - If both `requestLimit` and `streamRequestLimit` is 0, buffer requests are not limited and
 //   stream requests are disabled.
 // - If `streamRequestLimit` is 0, buffer requests are limited to `requestLimit` and stream
@@ -34,29 +34,33 @@ type Limits interface {
 // - If `requestLimit` is 0, buffer requests aren't limited, but stream requests are limited
 //   to `streamRequestLimit`.
 //
-func NewLimits(requestLimit uint32, streamRequestLimit uint32, readTimeout time.Duration) Limits {
+func NewLimits(requestLimit uint32, streamRequestLimit uint32) Limits {
   if requestLimit == 0 && streamRequestLimit == 0 {
-    return noLimitNoStream(readTimeout)
+    return &noLimitNoStream{DefaultLimits.ReadTimeout()}
 
   } else if requestLimit == 0 {
-    return &limitStream{limit{streamRequestLimit, 0}, readTimeout}
+    return &limitStream{limit{streamRequestLimit, 0}, DefaultLimits.ReadTimeout()}
 
   } else if streamRequestLimit == 0 {
-    return &limitSingleNoStream{limit{requestLimit, 0}, readTimeout}
+    return &limitSingleNoStream{limit{requestLimit, 0}, DefaultLimits.ReadTimeout()}
 
   } else {
     if streamRequestLimit > requestLimit {
       panic("streamRequestLimit > requestLimit")
     }
-    return &limitSingleAndStream{limit{requestLimit, 0}, limit{streamRequestLimit, 0}, readTimeout}
+    return &limitSingleAndStream{
+      limit{requestLimit, 0},
+      limit{streamRequestLimit, 0},
+      DefaultLimits.ReadTimeout(),
+    }
   }
 }
 
 // DefaultLimits does not limit buffer requests, and disables stream requests.
-var DefaultLimits = NewLimits(0, 0, 30 * time.Second)
+var DefaultLimits Limits = &noLimitNoStream{30 * time.Second}
 
 // NoLimits does not limit buffer requests or stream requests, not does it have a read timeout.
-var NoLimits = noLimit(false)
+var NoLimits Limits = noLimit(false)
 
 // -----------------------------------------------------------------------------------------------
 
@@ -67,16 +71,20 @@ func (l noLimit) streamReqEnabled() bool { return true }
 func (l noLimit) incStreamReq() bool { return true }
 func (l noLimit) decStreamReq() {}
 func (l noLimit) ReadTimeout() time.Duration { return 0 }
+func (l noLimit) SetReadTimeout(_ time.Duration) {}
 
 // -----------------------------------------------------------------------------------------------
 
-type noLimitNoStream time.Duration
-func (l noLimitNoStream) incBufferReq() bool { return true }
-func (l noLimitNoStream) decBufferReq() {}
-func (l noLimitNoStream) streamReqEnabled() bool { return false }
-func (l noLimitNoStream) incStreamReq() bool { return false }
-func (l noLimitNoStream) decStreamReq() {}
-func (l noLimitNoStream) ReadTimeout() time.Duration { return time.Duration(l) }
+type noLimitNoStream struct {
+  readTimeout time.Duration
+}
+func (l *noLimitNoStream) incBufferReq() bool { return true }
+func (l *noLimitNoStream) decBufferReq() {}
+func (l *noLimitNoStream) streamReqEnabled() bool { return false }
+func (l *noLimitNoStream) incStreamReq() bool { return false }
+func (l *noLimitNoStream) decStreamReq() {}
+func (l *noLimitNoStream) ReadTimeout() time.Duration { return l.readTimeout }
+func (l *noLimitNoStream) SetReadTimeout(d time.Duration) { l.readTimeout = d }
 
 // -----------------------------------------------------------------------------------------------
 
@@ -90,6 +98,7 @@ func (l *limitStream) streamReqEnabled() bool { return true }
 func (l *limitStream) incStreamReq() bool { return l.streamLimit.inc() }
 func (l *limitStream) decStreamReq() { l.streamLimit.dec() }
 func (l *limitStream) ReadTimeout() time.Duration { return l.readTimeout }
+func (l *limitStream) SetReadTimeout(d time.Duration) { l.readTimeout = d }
 
 // -----------------------------------------------------------------------------------------------
 
@@ -103,6 +112,7 @@ func (l *limitSingleNoStream) streamReqEnabled() bool { return false }
 func (l *limitSingleNoStream) incStreamReq() bool { return false }
 func (l *limitSingleNoStream) decStreamReq() {}
 func (l *limitSingleNoStream) ReadTimeout() time.Duration { return l.readTimeout }
+func (l *limitSingleNoStream) SetReadTimeout(d time.Duration) { l.readTimeout = d }
 
 // -----------------------------------------------------------------------------------------------
 
@@ -116,10 +126,10 @@ func (l *limitSingleAndStream) decBufferReq() { l.bothLimit.dec() }
 func (l *limitSingleAndStream) streamReqEnabled() bool { return true }
 func (l *limitSingleAndStream) incStreamReq() bool {
   if l.bothLimit.inc() {
-    if l.streamLimit.inc() == false {
-      l.bothLimit.dec()
-      return false
+    if l.streamLimit.inc() {
+      return true
     }
+    l.bothLimit.dec()
   }
   return false
 }
@@ -128,6 +138,7 @@ func (l *limitSingleAndStream) decStreamReq() {
   l.bothLimit.dec()
 }
 func (l *limitSingleAndStream) ReadTimeout() time.Duration { return l.readTimeout }
+func (l *limitSingleAndStream) SetReadTimeout(d time.Duration) { l.readTimeout = d }
 
 // -----------------------------------------------------------------------------------------------
 

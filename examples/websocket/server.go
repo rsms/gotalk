@@ -19,9 +19,10 @@ func onAccept(s *gotalk.Sock) {
     // Send a request & read result via JSON-encoded go values.
     greeting := GreetOut{}
     if err := s.Request("greet", GreetIn{"Rasmus"}, &greeting); err != nil {
-      panic("greet request failed: " + err.Error())
+      fmt.Printf("greet request failed: " + err.Error())
+    } else {
+      fmt.Printf("greet: %+v\n", greeting)
     }
-    fmt.Printf("greet: %+v\n", greeting)
   }()
 }
 
