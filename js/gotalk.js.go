@@ -1,1314 +1,1315 @@
 package gotalkjs
+
 const BrowserLibSizeString = "35184"
 const BrowserLibSHA1Base64 = "DwVU/vfrG2rK4jax0TV70+7MdnU="
 const BrowserLibETag = "\"DwVU/vfrG2rK4jax0TV70+7MdnU=\""
-const BrowserLibString = ""+
-  "(function(global){\n"+
-  "\"use strict\";\n"+
-  "\n"+
-  "var __mod = {}, __api = {}, __main, __mainapi;\n"+
-  "var evalDepth = 0;\n"+
-  "\n"+
-  "var require = function(name) {\n"+
-  "  var m, id = name.replace(/^.\\//, \"\");\n"+
-  "  m = __api[id];\n"+
-  "  //console.log('require', {name:name, id:id, exports:m});\n"+
-  "  if (!m) {\n"+
-  "    var prefix = ''; for (var i = 0; i < evalDepth; i++) {\n"+
-  "      prefix += '. ';\n"+
-  "    }\n"+
-  "    var f = __mod[id];\n"+
-  "    if (f && evalDepth < 100) {\n"+
-  "      __mod[id] = null;\n"+
-  "      __api[id] = {exports:{}};\n"+
-  "      ++evalDepth;\n"+
-  "      f(__api[id]);\n"+
-  "      --evalDepth;\n"+
-  "      __api[id] = __api[id].exports;\n"+
-  "    }\n"+
-  "    m = __api[id];\n"+
-  "  }\n"+
-  "  return m;\n"+
-  "};\n"+
-  "\n"+
-  "__mod[\"EventEmitter\"]=function(module) { var exports = module.exports;\n"+
-  "\n"+
-  "function EventEmitter() {}\n"+
-  "module.exports = EventEmitter;\n"+
-  "\n"+
-  "EventEmitter.prototype.addListener = function (type, listener) {\n"+
-  "  if (typeof listener !== 'function') throw TypeError('listener must be a function');\n"+
-  "  if (!this.__events) {\n"+
-  "    Object.defineProperty(this, '__events', {value:{}, enumerable:false, writable:true});\n"+
-  "    this.__events[type] = [listener];\n"+
-  "    return this;\n"+
-  "  }\n"+
-  "  var listeners = this.__events[type];\n"+
-  "  if (listeners === undefined) {\n"+
-  "    this.__events[type] = [listener];\n"+
-  "    return this;\n"+
-  "  }\n"+
-  "  listeners.push(listener);\n"+
-  "  return this;\n"+
-  "};\n"+
-  "\n"+
-  "EventEmitter.prototype.on = EventEmitter.prototype.addListener;\n"+
-  "\n"+
-  "EventEmitter.prototype.once = function (type, listener) {\n"+
-  "  var fired = false;\n"+
-  "  var trigger_event_once = function() {\n"+
-  "    this.removeListener(type, trigger_event_once);\n"+
-  "    if (!fired) {\n"+
-  "      fired = true;\n"+
-  "      listener.apply(this, arguments);\n"+
-  "    }\n"+
-  "  }\n"+
-  "  return this.on(type, trigger_event_once);\n"+
-  "};\n"+
-  "\n"+
-  "EventEmitter.prototype.removeListener = function (type, listener) {\n"+
-  "  var p, listeners = this.__events ? this.__events[type] : undefined;\n"+
-  "  if (listeners !== undefined) {\n"+
-  "    while ((p = listeners.indexOf(listener)) !== -1) {\n"+
-  "      listeners.splice(p,1);\n"+
-  "    }\n"+
-  "    if (listeners.length === 0) {\n"+
-  "      delete this.__events[type];\n"+
-  "    }\n"+
-  "    return listeners.length;\n"+
-  "  }\n"+
-  "  return this;\n"+
-  "};\n"+
-  "\n"+
-  "EventEmitter.prototype.removeAllListeners = function (type) {\n"+
-  "  if (this.__events) {\n"+
-  "    if (type) {\n"+
-  "      delete this.__events[type];\n"+
-  "    } else {\n"+
-  "      delete this.__events;\n"+
-  "    }\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "EventEmitter.prototype.listeners = function (type) {\n"+
-  "  return type ? (this.__events ? this.__events[type] : undefined) : this.__events;\n"+
-  "};\n"+
-  "\n"+
-  "EventEmitter.prototype.emit = function (type) {\n"+
-  "  var listeners = this.__events ? this.__events[type] : undefined;\n"+
-  "  if (listeners === undefined) {\n"+
-  "    return false;\n"+
-  "  }\n"+
-  "  var i = 0, L = listeners.length, args = Array.prototype.slice.call(arguments,1);\n"+
-  "  for (; i !== L; ++i) {\n"+
-  "    if (!listeners[i]) {\n"+
-  "      console.log('e', type, i, args);\n"+
-  "    }\n"+
-  "    listeners[i].apply(this, args);\n"+
-  "  }\n"+
-  "  return true;\n"+
-  "};\n"+
-  "\n"+
-  "EventEmitter.mixin = function mixin(obj) {\n"+
-  "  var proto = obj;\n"+
-  "  while (proto) {\n"+
-  "    if (proto.__proto__ === Object.prototype) {\n"+
-  "      proto.__proto__ = EventEmitter.prototype;\n"+
-  "      return obj;\n"+
-  "    }\n"+
-  "    proto = proto.__proto__;\n"+
-  "  }\n"+
-  "  return obj;\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "};\n"+
-  "\n"+
-  "__mod[\"buf\"]=function(module) { var exports = module.exports;\n"+
-  "\"use strict\";\n"+
-  "var Buf;\n"+
-  "\n"+
-  "if (typeof Uint8Array !== 'undefined') {\n"+
-  "\n"+
-  "var utf8 = require('./utf8');\n"+
-  "\n"+
-  "Uint8Array.prototype.toString = function (encoding, start, end) {\n"+
-  "  // assumes buffer contains UTF8-encoded text\n"+
-  "  return utf8.decode(this, start, end);\n"+
-  "};\n"+
-  "\n"+
-  "Uint8Array.prototype.slice = Uint8Array.prototype.subarray;\n"+
-  "\n"+
-  "// Copies data from a region of this buffer to a region in the target buffer.\n"+
-  "// copy(targetBuffer, [targetStart], [sourceStart], [sourceEnd]) -> Buf\n"+
-  "Uint8Array.prototype.copy = function (targetBuffer, targetStart, sourceStart, sourceEnd) {\n"+
-  "  var srcBuf = this;\n"+
-  "  if (sourceStart) {\n"+
-  "    srcBuf = srcBuf.slice(sourceStart, sourceEnd || srcBuf.length - sourceStart);\n"+
-  "  }\n"+
-  "  targetBuffer.set(srcBuf, targetStart || 0);\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "// Buf(Buf) -> Buf\n"+
-  "// Buf(size int) -> Buf\n"+
-  "// Buf(ArrayBuffer) -> Buf\n"+
-  "Buf = function Buf(v) {\n"+
-  "  return v instanceof Uint8Array ? v :\n"+
-  "    new Uint8Array(\n"+
-  "      v instanceof ArrayBuffer ? v :\n"+
-  "      new ArrayBuffer(v)\n"+
-  "    );\n"+
-  "};\n"+
-  "\n"+
-  "Buf.isBuf = function (v) {\n"+
-  "  return v instanceof Uint8Array;\n"+
-  "};\n"+
-  "\n"+
-  "Buf.fromString = function (s, encoding) {\n"+
-  "  return utf8.encode(s, Buf);\n"+
-  "};\n"+
-  "\n"+
-  "}\n"+
-  "\n"+
-  "module.exports = Buf;\n"+
-  "\n"+
-  "};\n"+
-  "\n"+
-  "__mod[\"keepalive\"]=function(module) { var exports = module.exports;\n"+
-  "\"use strict\";\n"+
-  "// Stay connected by automatically reconnecting w/ exponential back-off.\n"+
-  "\n"+
-  "var netAccess = require('./netaccess');\n"+
-  "var protocol = require('./protocol');\n"+
-  "\n"+
-  "// `s` must conform to interface { connect(addr string, cb function(Error)) }\n"+
-  "// Returns an object {\n"+
-  "//   isConnected bool  // true if currently connected\n"+
-  "//   isEnabled bool    // true if enabled\n"+
-  "//   enable()          // enables staying connected\n"+
-  "//   disable()         // disables trying to stay connected\n"+
-  "// }\n"+
-  "var keepalive = function(s, addr, minReconnectDelay, maxReconnectDelay) {\n"+
-  "  if (!minReconnectDelay) {\n"+
-  "    minReconnectDelay = 500;\n"+
-  "  } else if (minReconnectDelay < 100) {\n"+
-  "    minReconnectDelay = 100;\n"+
-  "  }\n"+
-  "\n"+
-  "  if (!maxReconnectDelay || maxReconnectDelay < minReconnectDelay) {\n"+
-  "    maxReconnectDelay = 5000;\n"+
-  "  }\n"+
-  "\n"+
-  "  var ctx, open, retry, delay = 0, openTimer, opentime;\n"+
-  "\n"+
-  "  ctx = {\n"+
-  "    isEnabled: false,\n"+
-  "    isConnected: false,\n"+
-  "    enable: function() {\n"+
-  "      if (!ctx.enabled) {\n"+
-  "        ctx.enabled = true;\n"+
-  "        delay = 0;\n"+
-  "        if (!ctx.isConnected) {\n"+
-  "          open();\n"+
-  "        }\n"+
-  "      }\n"+
-  "    },\n"+
-  "    disable: function() {\n"+
-  "      if (ctx.enabled) {\n"+
-  "        clearTimeout(openTimer);\n"+
-  "        ctx.enabled = false;\n"+
-  "        delay = 0;\n"+
-  "      }\n"+
-  "    }\n"+
-  "  };\n"+
-  "\n"+
-  "  open = function() {\n"+
-  "    clearTimeout(openTimer);\n"+
-  "    s.open(addr, function(err) {\n"+
-  "      opentime = new Date;\n"+
-  "      if (err) {\n"+
-  "        retry(err);\n"+
-  "      } else {\n"+
-  "        delay = 0;\n"+
-  "        ctx.isConnected = true;\n"+
-  "        s.once('close', retry);\n"+
-  "      }\n"+
-  "    });\n"+
-  "  };\n"+
-  "\n"+
-  "  retry = function(err) {\n"+
-  "    clearTimeout(openTimer);\n"+
-  "    ctx.isConnected = false;\n"+
-  "    if (!ctx.enabled) {\n"+
-  "      return;\n"+
-  "    }\n"+
-  "    if (netAccess.available && !netAccess.onLine && \n"+
-  "        !(typeof document !== 'undefined' &&\n"+
-  "          document.location &&\n"+
-  "          document.location.hostname !== 'localhost' &&\n"+
-  "          document.location.hostname !== '127.0.0.1' &&\n"+
-  "          document.location.hostname !== '[::1]') )\n"+
-  "    {\n"+
-  "      netAccess.once('online', retry);\n"+
-  "      delay = 0;\n"+
-  "      return;\n"+
-  "    }\n"+
-  "    if (err) {\n"+
-  "      if (err.isGotalkProtocolError) {\n"+
-  "        if (err.code === protocol.ErrorTimeout) {\n"+
-  "          delay = 0;\n"+
-  "        } else {\n"+
-  "          // We shouldn't retry with the same version of our gotalk library.\n"+
-  "          // However, the only sensible thing to do in this case is to let the user code react to\n"+
-  "          // the error passed to the close event (e.g. to show a \"can't talk to server\" UI), and\n"+
-  "          // retry in maxReconnectDelay.\n"+
-  "          // User code can choose to call `disable()` on its keepalive object in this case.\n"+
-  "          delay = maxReconnectDelay;\n"+
-  "        }\n"+
-  "      } else {\n"+
-  "        // increase back off in case of an error\n"+
-  "        delay = delay ? Math.min(maxReconnectDelay, delay * 2) : minReconnectDelay;\n"+
-  "      }\n"+
-  "    } else {\n"+
-  "      delay = Math.max(0, minReconnectDelay - ((new Date) - opentime));\n"+
-  "    }\n"+
-  "    openTimer = setTimeout(open, delay);\n"+
-  "  };\n"+
-  "\n"+
-  "  return ctx;\n"+
-  "};\n"+
-  "\n"+
-  "module.exports = keepalive;\n"+
-  "\n"+
-  "};\n"+
-  "\n"+
-  "__mod[\"netaccess\"]=function(module) { var exports = module.exports;\n"+
-  "\"use strict\";\n"+
-  "var EventEmitter = require('./EventEmitter');\n"+
-  "var m;\n"+
-  "\n"+
-  "if (typeof global !== 'undefined' && global.addEventListener) {\n"+
-  "  m = Object.create(EventEmitter.prototype, {\n"+
-  "    available: {value:true, enumerable:true},\n"+
-  "    onLine:    {value:true, enumerable:true, writable:true}\n"+
-  "  });\n"+
-  "\n"+
-  "  if (typeof navigator !== 'undefined') {\n"+
-  "    m.onLine = navigator.onLine;\n"+
-  "  }\n"+
-  "\n"+
-  "  global.addEventListener(\"offline\", function (ev) {\n"+
-  "    m.onLine = false;\n"+
-  "    m.emit('offline');\n"+
-  "  });\n"+
-  "\n"+
-  "  global.addEventListener(\"online\", function (ev) {\n"+
-  "    m.onLine = true;\n"+
-  "    m.emit('online');\n"+
-  "  });\n"+
-  "\n"+
-  "} else {\n"+
-  "  m = {available:false, onLine:true};\n"+
-  "}\n"+
-  "\n"+
-  "module.exports = m;\n"+
-  "\n"+
-  "};\n"+
-  "\n"+
-  "__mod[\"protocol\"]=function(module) { var exports = module.exports;\n"+
-  "\"use strict\";\n"+
-  "var Buf = require('./buf');\n"+
-  "var utf8 = require('./utf8');\n"+
-  "\n"+
-  "// Version of this protocol\n"+
-  "exports.Version = 1;\n"+
-  "\n"+
-  "// Message types\n"+
-  "var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     'r'.charCodeAt(0),\n"+
-  "    MsgTypeStreamReq     = exports.MsgTypeStreamReq =     's'.charCodeAt(0),\n"+
-  "    MsgTypeStreamReqPart = exports.MsgTypeStreamReqPart = 'p'.charCodeAt(0),\n"+
-  "    MsgTypeSingleRes     = exports.MsgTypeSingleRes =     'R'.charCodeAt(0),\n"+
-  "    MsgTypeStreamRes     = exports.MsgTypeStreamRes =     'S'.charCodeAt(0),\n"+
-  "    MsgTypeErrorRes      = exports.MsgTypeErrorRes =      'E'.charCodeAt(0),\n"+
-  "    MsgTypeRetryRes      = exports.MsgTypeRetryRes =      'e'.charCodeAt(0),\n"+
-  "    MsgTypeNotification  = exports.MsgTypeNotification =  'n'.charCodeAt(0),\n"+
-  "    MsgTypeHeartbeat     = exports.MsgTypeHeartbeat =     'h'.charCodeAt(0),\n"+
-  "    MsgTypeProtocolError = exports.MsgTypeProtocolError = 'f'.charCodeAt(0);\n"+
-  "\n"+
-  "// ProtocolError codes\n"+
-  "exports.ErrorAbnormal    = 0\n"+
-  "exports.ErrorUnsupported = 1;\n"+
-  "exports.ErrorInvalidMsg  = 2;\n"+
-  "exports.ErrorTimeout     = 3;\n"+
-  "\n"+
-  "// Maximum value of a heartbeat's \"load\"\n"+
-  "exports.HeartbeatMsgMaxLoad = 0xffff;\n"+
-  "\n"+
-  "// ==============================================================================================\n"+
-  "// Binary (byte) protocol\n"+
-  "\n"+
-  "function copyBufFixnum(b, start, n, digits) {\n"+
-  "  var i = start || 0, y = 0, c, s = n.toString(16), z = digits - s.length;\n"+
-  "  for (; z--;) { b[i++] = 48; }\n"+
-  "  for (; !isNaN(c = s.charCodeAt(y++));) { b[i++] = c; }\n"+
-  "}\n"+
-  "\n"+
-  "function makeBufFixnum(n, digits) {\n"+
-  "  var b = Buf(digits);\n"+
-  "  copyBufFixnum(b, 0, n, digits);\n"+
-  "  return b;\n"+
-  "}\n"+
-  "\n"+
-  "// Note: This code assumes parseInt accepts a Buf\n"+
-  "\n"+
-  "exports.binary = {\n"+
-  "\n"+
-  "  makeFixnum: makeBufFixnum,\n"+
-  "\n"+
-  "  versionBuf: makeBufFixnum(exports.Version, 2),\n"+
-  "\n"+
-  "  parseVersion: function (b) {\n"+
-  "    return parseInt(b, 16);\n"+
-  "  },\n"+
-  "\n"+
-  "  // Parses a byte buffer containing a message (not including payload data.)\n"+
-  "  // If t is MsgTypeHeartbeat, wait==load, size==time.\n"+
-  "  // -> {t:string, id:Buf, name:string, wait:int size:int} | null\n"+
-  "  parseMsg: function (b) {\n"+
-  "    var t, id, name, namez, wait = 0, size = 0, z;\n"+
-  "\n"+
-  "    t = b[0];\n"+
-  "    z = 1;\n"+
-  "\n"+
-  "    if (t === MsgTypeHeartbeat) {\n"+
-  "      wait = parseInt(b.slice(z, z + 4), 16);\n"+
-  "      z += 4;\n"+
-  "    } else if (t !== MsgTypeNotification && t !== MsgTypeProtocolError) {\n"+
-  "      id = b.slice(z, z + 4);\n"+
-  "      z += 4;\n"+
-  "    }\n"+
-  "\n"+
-  "    if (t == MsgTypeSingleReq || t == MsgTypeStreamReq || t == MsgTypeNotification) {\n"+
-  "      namez = parseInt(b.slice(z, z + 3), 16);\n"+
-  "      z += 3;\n"+
-  "      name = b.slice(z, z+namez).toString();\n"+
-  "      z += namez;\n"+
-  "    } else if (t === MsgTypeRetryRes) {\n"+
-  "      wait = parseInt(b.slice(z, z + 8), 16);\n"+
-  "      z += 8\n"+
-  "    }\n"+
-  "\n"+
-  "    size = parseInt(b.slice(z, z + 8), 16);\n"+
-  "\n"+
-  "    return {t:t, id:id, name:name, wait:wait, size:size};\n"+
-  "  },\n"+
-  "\n"+
-  "  // Create a buf representing a message (w/o any payload)\n"+
-  "  makeMsg: function (t, id, name, wait, size) {\n"+
-  "    var b, nameb, z = id ? 13 : 9;\n"+
-  "\n"+
-  "    if (name && name.length !== 0) {\n"+
-  "      nameb = Buf.fromString(name);\n"+
-  "      z += 3 + nameb.length;\n"+
-  "    }\n"+
-  "\n"+
-  "    b = Buf(z);\n"+
-  "\n"+
-  "    b[0] = t;\n"+
-  "    z = 1;\n"+
-  "\n"+
-  "    if (id && id.length === 4) {\n"+
-  "      if (typeof id === 'string') {\n"+
-  "        b[1] = id.charCodeAt(0);\n"+
-  "        b[2] = id.charCodeAt(1);\n"+
-  "        b[3] = id.charCodeAt(2);\n"+
-  "        b[4] = id.charCodeAt(3);\n"+
-  "      } else {\n"+
-  "        b[1] = id[0];\n"+
-  "        b[2] = id[1];\n"+
-  "        b[3] = id[2];\n"+
-  "        b[4] = id[3];\n"+
-  "      }\n"+
-  "      z += 4;\n"+
-  "    }\n"+
-  "\n"+
-  "    if (name && name.length !== 0) {\n"+
-  "      nameb = Buf.fromString(name);\n"+
-  "      copyBufFixnum(b, z, nameb.length, 3);\n"+
-  "      z += 3;\n"+
-  "      nameb.copy(b, z);\n"+
-  "      z += nameb.length;\n"+
-  "    }\n"+
-  "\n"+
-  "    if (t === MsgTypeRetryRes) {\n"+
-  "      copyBufFixnum(b, z, wait, 8);\n"+
-  "      z += 8\n"+
-  "    }\n"+
-  "\n"+
-  "    copyBufFixnum(b, z, size, 8);\n"+
-  "\n"+
-  "    return b;\n"+
-  "  },\n"+
-  "\n"+
-  "  // Create a buf representing a heartbeat message\n"+
-  "  makeHeartbeatMsg: function(load) {\n"+
-  "    var b = Buf(13), z = 1;\n"+
-  "    b[0] = MsgTypeHeartbeat;\n"+
-  "    copyBufFixnum(b, z, load, 4);\n"+
-  "    z += 4;\n"+
-  "    copyBufFixnum(b, z, Math.round((new Date).getTime()/1000), 8);\n"+
-  "    z += 8;\n"+
-  "    return b;\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "// ==============================================================================================\n"+
-  "// Text protocol\n"+
-  "\n"+
-  "var zeroes = '00000000';\n"+
-  "\n"+
-  "function makeStrFixnum(n, digits) {\n"+
-  "  var s = n.toString(16);\n"+
-  "  return zeroes.substr(0, digits - s.length) + s;\n"+
-  "}\n"+
-  "\n"+
-  "exports.text = {\n"+
-  "\n"+
-  "  makeFixnum: makeStrFixnum,\n"+
-  "\n"+
-  "  versionBuf: makeStrFixnum(exports.Version, 2),\n"+
-  "\n"+
-  "  parseVersion: function (buf) {\n"+
-  "    return parseInt(buf.substr(0,2), 16);\n"+
-  "  },\n"+
-  "\n"+
-  "  // Parses a text string containing a message (not including payload data.)\n"+
-  "  // If t is MsgTypeHeartbeat, wait==load, size==time.\n"+
-  "  // -> {t:string, id:Buf, name:string, wait:int size:int} | null\n"+
-  "  parseMsg: function (s) {\n"+
-  "    // \"r001004echo00000005\" => ('r', \"001\", \"echo\", 5)\n"+
-  "    // \"R00100000005\"        => ('R', \"001\", \"\", 5)\n"+
-  "    var t, id, name, wait = 0, size = 0, z;\n"+
-  "\n"+
-  "    t = s.charCodeAt(0);\n"+
-  "    z = 1;\n"+
-  "\n"+
-  "    if (t === MsgTypeHeartbeat) {\n"+
-  "      wait = parseInt(s.substr(z, 4), 16);\n"+
-  "      z += 4;\n"+
-  "    } else if (t !== MsgTypeNotification && t !== MsgTypeProtocolError) {\n"+
-  "      id = s.substr(z, 4);\n"+
-  "      z += 4;\n"+
-  "    }\n"+
-  "\n"+
-  "    if (t == MsgTypeSingleReq || t == MsgTypeStreamReq || t == MsgTypeNotification) {\n"+
-  "      name = s.substring(z + 3, s.length - 8);\n"+
-  "    } else if (t == MsgTypeRetryRes) {\n"+
-  "      wait = parseInt(s.substr(z, 8), 16);\n"+
-  "      z += 8\n"+
-  "    }\n"+
-  "\n"+
-  "    size = parseInt(s.substr(s.length - 8), 16);\n"+
-  "\n"+
-  "    return {t:t, id:id, name:name, wait:wait, size:size};\n"+
-  "  },\n"+
-  "\n"+
-  "\n"+
-  "  // Create a text string representing a message (w/o any payload.)\n"+
-  "  makeMsg: function (t, id, name, wait, size) {\n"+
-  "    var b = String.fromCharCode(t);\n"+
-  "\n"+
-  "    if (id && id.length === 4) {\n"+
-  "      b += id;\n"+
-  "    }\n"+
-  "\n"+
-  "    if (name && name.length !== 0) {\n"+
-  "      b += makeStrFixnum(utf8.sizeOf(name), 3);\n"+
-  "      b += name;\n"+
-  "    }\n"+
-  "\n"+
-  "    if (t === MsgTypeRetryRes) {\n"+
-  "      b += makeStrFixnum(wait, 8);\n"+
-  "    }\n"+
-  "\n"+
-  "    b += makeStrFixnum(size, 8);\n"+
-  "\n"+
-  "    return b;\n"+
-  "  },\n"+
-  "\n"+
-  "  // Create a text string representing a heartbeat message\n"+
-  "  makeHeartbeatMsg: function(load) {\n"+
-  "    var s = String.fromCharCode(MsgTypeHeartbeat);\n"+
-  "    s += makeStrFixnum(load, 4);\n"+
-  "    s += makeStrFixnum(Math.round((new Date).getTime()/1000), 8);\n"+
-  "    return s;\n"+
-  "  }\n"+
-  "\n"+
-  "}; // exports.text\n"+
-  "\n"+
-  "\n"+
-  "};\n"+
-  "\n"+
-  "__mod[\"utf8\"]=function(module) { var exports = module.exports;\n"+
-  "\"use strict\";\n"+
-  "//\n"+
-  "// decode(Buf, [start], [end]) -> String\n"+
-  "// encode(String, BufFactory) -> Buf\n"+
-  "// sizeOf(String) -> int\n"+
-  "//\n"+
-  "\n"+
-  "// Returns the number of bytes needed to represent string `s` as UTF8\n"+
-  "function sizeOf(s) {\n"+
-  "  var z = 0, i = 0, c;\n"+
-  "  for (; c = s.charCodeAt(i++); z += (c >> 11 ? 3 : c >> 7 ? 2 : 1) );\n"+
-  "  return z;\n"+
-  "}\n"+
-  "exports.sizeOf = sizeOf;\n"+
-  "\n"+
-  "function mask8(c) {\n"+
-  "  return 0xff & c;\n"+
-  "}\n"+
-  "\n"+
-  "if (typeof TextDecoder !== 'undefined') {\n"+
-  "  // ============================================================================================\n"+
-  "  // Native TextDecoder/TextEncoder implementation\n"+
-  "  var decoder = new TextDecoder('utf8');\n"+
-  "  var encoder = new TextEncoder('utf8');\n"+
-  "\n"+
-  "  exports.decode = function decode(b, start, end) {\n"+
-  "    if (start || end) {\n"+
-  "      if (!start) start = 0;\n"+
-  "      b = b.slice(start, end || b.length - start);\n"+
-  "    }\n"+
-  "    return decoder.decode(b);\n"+
-  "  };\n"+
-  "\n"+
-  "  exports.encode = function encode(s, Buf) {\n"+
-  "    return Buf(encoder.encode(s));\n"+
-  "  };\n"+
-  "\n"+
-  "} else {\n"+
-  "  // ============================================================================================\n"+
-  "  // JS implementation\n"+
-  "\n"+
-  "  exports.decode = function decode(b, start, end) {\n"+
-  "    var i = start || 0, e = (end || b.length - i), c, lead, s = '';\n"+
-  "    for (i = 0; i < e; ) {\n"+
-  "      c = b[i++];\n"+
-  "      lead = mask8(c);\n"+
-  "      if (lead < 0x80) {\n"+
-  "        // single byte\n"+
-  "      } else if ((lead >> 5) == 0x6) {\n"+
-  "        c = ((c << 6) & 0x7ff) + (b[i++] & 0x3f);\n"+
-  "      } else if ((lead >> 4) == 0xe) {\n"+
-  "        c = ((c << 12) & 0xffff) + ((mask8(b[i++]) << 6) & 0xfff);\n"+
-  "        c += b[i++] & 0x3f;\n"+
-  "      } else if ((lead >> 3) == 0x1e) {\n"+
-  "        c = ((c << 18) & 0x1fffff) + ((mask8(b[i++]) << 12) & 0x3ffff);\n"+
-  "        c += (mask8(b[i++]) << 6) & 0xfff;\n"+
-  "        c += b[i++] & 0x3f;\n"+
-  "      }\n"+
-  "      s += String.fromCharCode(c);\n"+
-  "    }\n"+
-  "\n"+
-  "    return s;\n"+
-  "  };\n"+
-  "\n"+
-  "  exports.encode = function encode(s, Buf) {\n"+
-  "    var i = 0, e = s.length, c, j = 0, b = Buf(sizeOf(s));\n"+
-  "    for (; i !== e;) {\n"+
-  "      c = s.charCodeAt(i++);\n"+
-  "      // TODO FIXME: charCodeAt returns UTF16-like codepoints, not UTF32 codepoints, meaning that\n"+
-  "      // this code only works for BMP. However, current ES only supports BMP. Ultimately we should\n"+
-  "      // dequeue a second UTF16 codepoint when c>BMP.\n"+
-  "      if (c < 0x80) {\n"+
-  "        b[j++] = c;\n"+
-  "      } else if (c < 0x800) {\n"+
-  "        b[j++] = (c >> 6)   | 0xc0;\n"+
-  "        b[j++] = (c & 0x3f) | 0x80;\n"+
-  "      } else if (c < 0x10000) {\n"+
-  "        b[j++] = (c >> 12)          | 0xe0;\n"+
-  "        b[j++] = ((c >> 6) & 0x3f)  | 0x80;\n"+
-  "        b[j++] = (c & 0x3f)         | 0x80;\n"+
-  "      } else {\n"+
-  "        b[j++] = (c >> 18)          | 0xf0;\n"+
-  "        b[j++] = ((c >> 12) & 0x3f) | 0x80;\n"+
-  "        b[j++] = ((c >> 6) & 0x3f)  | 0x80;\n"+
-  "        b[j++] = (c & 0x3f)         | 0x80;\n"+
-  "      }\n"+
-  "    }\n"+
-  "    return b;\n"+
-  "  };\n"+
-  "\n"+
-  "}\n"+
-  "\n"+
-  "// var s = '\xe2\x88\x86\xc3\xa5\xc3\x9ff'; // '\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e'\n"+
-  "// var b = exports.encode(s);\n"+
-  "// console.log('encode(\"'+s+'\") =>', b);\n"+
-  "// console.log('decode(',b,') =>', exports.decode(b));\n"+
-  "\n"+
-  "};\n"+
-  "\n"+
-  "__main=function(module) { var exports = module.exports;\n"+
-  "\"use strict\";\n"+
-  "var protocol = require('./protocol'),\n"+
-  "      txt = protocol.text,\n"+
-  "      bin = protocol.binary;\n"+
-  "var Buf = require('./buf');\n"+
-  "var utf8 = require('./utf8');\n"+
-  "var EventEmitter = require('./EventEmitter');\n"+
-  "var keepalive = require('./keepalive');\n"+
-  "\n"+
-  "var gotalk = exports;\n"+
-  "\n"+
-  "gotalk.protocol = protocol;\n"+
-  "gotalk.Buf = Buf;\n"+
-  "\n"+
-  "function decodeJSON(v) {\n"+
-  "  var value;\n"+
-  "  try {\n"+
-  "    value = JSON.parse(v);\n"+
-  "  } catch (e) {\n"+
-  "    // console.warn('failed to decode JSON \"'+(typeof v === 'string' ? v : v.toString())+'\":',e);\n"+
-  "  }\n"+
-  "  return value;\n"+
-  "}\n"+
-  "\n"+
-  "\n"+
-  "// ===============================================================================================\n"+
-  "\n"+
-  "function Sock(handlers) { return Object.create(Sock.prototype, {\n"+
-  "  // Public properties\n"+
-  "  handlers:      {value:handlers, enumerable:true},\n"+
-  "  protocol:      {value: Buf ? protocol.binary : protocol.text, enumerable:true, writable:true},\n"+
-  "  heartbeatInterval: {value: 20 * 1000, enumerable:true, writable:true},\n"+
-  "\n"+
-  "  // Internal\n"+
-  "  ws:            {value:null, writable:true},\n"+
-  "  keepalive:     {value:null, writable:true},\n"+
-  "\n"+
-  "  // Used for performing requests\n"+
-  "  nextOpID:      {value:0, writable:true},\n"+
-  "  nextStreamID:  {value:0, writable:true},\n"+
-  "  pendingRes:    {value:{}, writable:true},\n"+
-  "  hasPendingRes: {get:function(){ for (var k in this.pendingRes) { return true; } }},\n"+
-  "\n"+
-  "  // True if end() has been called while there were outstanding responses\n"+
-  "  pendingClose:  {value:false, writable:true}\n"+
-  "}); }\n"+
-  "\n"+
-  "Sock.prototype = EventEmitter.mixin(Sock.prototype);\n"+
-  "exports.Sock = Sock;\n"+
-  "\n"+
-  "\n"+
-  "var resetSock = function(s, causedByErr) {\n"+
-  "  s.pendingClose = false;\n"+
-  "\n"+
-  "  if (s.ws) {\n"+
-  "    s.ws.onmessage = null;\n"+
-  "    s.ws.onerror = null;\n"+
-  "    s.ws.onclose = null;\n"+
-  "    s.ws = null;\n"+
-  "  }\n"+
-  "\n"+
-  "  s.nextOpID = 0;\n"+
-  "  if (s.hasPendingRes) {\n"+
-  "    var err = causedByErr || new Error('connection closed');\n"+
-  "    // TODO: return a RetryResult kind of error instead of just an error\n"+
-  "    for (var k in s.pendingRes) {\n"+
-  "      s.pendingRes[k](err);\n"+
-  "    }\n"+
-  "    s.pendingRes = {};\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "var websocketCloseStatus = {\n"+
-  "  1000: 'normal',\n"+
-  "  1001: 'going away',\n"+
-  "  1002: 'protocol error',\n"+
-  "  1003: 'unsupported',\n"+
-  "  // 1004 is currently unassigned\n"+
-  "  1005: 'no status',\n"+
-  "  1006: 'abnormal',\n"+
-  "  1007: 'inconsistent',\n"+
-  "  1008: 'invalid message',\n"+
-  "  1009: 'too large',\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "// Adopt a web socket, which should be in an OPEN state\n"+
-  "Sock.prototype.adoptWebSocket = function(ws) {\n"+
-  "  var s = this;\n"+
-  "  if (ws.readyState !== WebSocket.OPEN) {\n"+
-  "    throw new Error('web socket readyState != OPEN');\n"+
-  "  }\n"+
-  "  ws.binaryType = 'arraybuffer';\n"+
-  "  s.ws = ws;\n"+
-  "  ws.onclose = function(ev) {\n"+
-  "    var err = ws._gotalkCloseError;\n"+
-  "    if (!err && ev.code !== 1000) {\n"+
-  "      err = new Error('websocket closed: ' + (websocketCloseStatus[ev.code] || '#'+ev.code));\n"+
-  "    }\n"+
-  "    resetSock(s, err);\n"+
-  "    s.emit('close', err);\n"+
-  "  };\n"+
-  "  ws.onmessage = function(ev) {\n"+
-  "    if (!ws._bufferedMessages) ws._bufferedMessages = [];\n"+
-  "    ws._bufferedMessages.push(ev.data);\n"+
-  "  };\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.handshake = function () {\n"+
-  "  this.ws.send(this.protocol.versionBuf);\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.end = function() {\n"+
-  "  // Allow calling twice to \"force close\" even when there are pending responses\n"+
-  "  var s = this;\n"+
-  "  if (s.keepalive) {\n"+
-  "    s.keepalive.disable();\n"+
-  "    s.keepalive = null;\n"+
-  "  }\n"+
-  "  if (!s.pendingClose && s.hasPendingRes) {\n"+
-  "    s.pendingClose = true;\n"+
-  "  } else if (s.ws) {\n"+
-  "    s.ws.close(1000);\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.address = function() {\n"+
-  "  var s = this;\n"+
-  "  if (s.ws) {\n"+
-  "    return s.ws.url;\n"+
-  "  }\n"+
-  "  return null;\n"+
-  "};\n"+
-  "\n"+
-  "// ===============================================================================================\n"+
-  "// Reading messages from a connection\n"+
-  "\n"+
-  "var ErrAbnormal = exports.ErrAbnormal = Error(\"unsupported protocol\");\n"+
-  "ErrAbnormal.isGotalkProtocolError = true;\n"+
-  "ErrAbnormal.code = protocol.ErrorAbnormal;\n"+
-  "\n"+
-  "var ErrUnsupported = exports.ErrUnsupported = Error(\"unsupported protocol\");\n"+
-  "ErrUnsupported.isGotalkProtocolError = true;\n"+
-  "ErrUnsupported.code = protocol.ErrorUnsupported;\n"+
-  "\n"+
-  "var ErrInvalidMsg = exports.ErrInvalidMsg = Error(\"invalid protocol message\");\n"+
-  "ErrInvalidMsg.isGotalkProtocolError = true;\n"+
-  "ErrInvalidMsg.code = protocol.ErrorInvalidMsg;\n"+
-  "\n"+
-  "var ErrTimeout = exports.ErrTimeout = Error(\"timeout\");\n"+
-  "ErrTimeout.isGotalkProtocolError = true;\n"+
-  "ErrTimeout.code = protocol.ErrorTimeout;\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.sendHeartbeat = function (load) {\n"+
-  "  var s = this, buf = s.protocol.makeHeartbeatMsg(Math.round(load * protocol.HeartbeatMsgMaxLoad));\n"+
-  "  try {\n"+
-  "    s.ws.send(buf);\n"+
-  "  } catch (err) {\n"+
-  "    if (!this.ws || this.ws.readyState > WebSocket.OPEN) {\n"+
-  "      err = new Error('socket is closed');\n"+
-  "    }\n"+
-  "    throw err;\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.startSendingHeartbeats = function() {\n"+
-  "  var s = this;\n"+
-  "  if (s.heartbeatInterval < 10) {\n"+
-  "    throw new Error(\"Sock.heartbeatInterval is too low\");\n"+
-  "  }\n"+
-  "  clearTimeout(s._sendHeartbeatsTimer);\n"+
-  "  var send = function() {\n"+
-  "    clearTimeout(s._sendHeartbeatsTimer);\n"+
-  "    s.sendHeartbeat(0);\n"+
-  "    s._sendHeartbeatsTimer = setTimeout(send, s.heartbeatInterval);\n"+
-  "  };\n"+
-  "  s._sendHeartbeatsTimer = setTimeout(send, 1);\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.stopSendingHeartbeats = function() {\n"+
-  "  clearTimeout(s._sendHeartbeatsTimer);\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.startReading = function () {\n"+
-  "  var s = this, ws = s.ws, msg;  // msg = current message\n"+
-  "\n"+
-  "  function readMsg(ev) {\n"+
-  "    msg = typeof ev.data === 'string' ? txt.parseMsg(ev.data) : bin.parseMsg(Buf(ev.data));\n"+
-  "    // console.log(\n"+
-  "    //   'readMsg:',\n"+
-  "    //   typeof ev.data === 'string' ? ev.data : Buf(ev.data).toString(),\n"+
-  "    //   'msg:',\n"+
-  "    //   msg\n"+
-  "    // );\n"+
-  "    if (msg.t === protocol.MsgTypeProtocolError) {\n"+
-  "      var errcode = msg.size;\n"+
-  "      if (errcode === protocol.ErrorAbnormal) {\n"+
-  "        ws._gotalkCloseError = ErrAbnormal;\n"+
-  "      } else if (errcode === protocol.ErrorUnsupported) {\n"+
-  "        ws._gotalkCloseError = ErrUnsupported;\n"+
-  "      } else if (errcode === protocol.ErrorTimeout) {\n"+
-  "        ws._gotalkCloseError = ErrTimeout;\n"+
-  "      } else {\n"+
-  "        ws._gotalkCloseError = ErrInvalidMsg;\n"+
-  "      }\n"+
-  "      ws.close(4000 + errcode);\n"+
-  "    } else if (msg.size !== 0 && msg.t !== protocol.MsgTypeHeartbeat) {\n"+
-  "      ws.onmessage = readMsgPayload;\n"+
-  "    } else {\n"+
-  "      s.handleMsg(msg);\n"+
-  "      msg = null;\n"+
-  "    }\n"+
-  "  }\n"+
-  "\n"+
-  "  function readMsgPayload(ev) {\n"+
-  "    var b = ev.data;\n"+
-  "    ws.onmessage = readMsg;\n"+
-  "    s.handleMsg(msg, typeof b === 'string' ? b : Buf(b));\n"+
-  "    msg = null;\n"+
-  "  }\n"+
-  "\n"+
-  "  function readVersion(ev) {\n"+
-  "    var peerVersion = typeof ev.data === 'string' ? txt.parseVersion(ev.data) :\n"+
-  "                                                    bin.parseVersion(Buf(ev.data));\n"+
-  "    if (peerVersion !== protocol.Version) {\n"+
-  "      ws._gotalkCloseError = ErrUnsupported;\n"+
-  "      s.closeError(protocol.ErrorUnsupported);\n"+
-  "    } else {\n"+
-  "      ws.onmessage = readMsg;\n"+
-  "      if (s.heartbeatInterval > 0) {\n"+
-  "        s.startSendingHeartbeats();\n"+
-  "      }\n"+
-  "    }\n"+
-  "  }\n"+
-  "\n"+
-  "  // We begin by sending our version and reading the remote side's version\n"+
-  "  ws.onmessage = readVersion;\n"+
-  "\n"+
-  "  // Any buffered messages?\n"+
-  "  if (ws._bufferedMessages) {\n"+
-  "    ws._bufferedMessages.forEach(function(data){ ws.onmessage({data:data}); });\n"+
-  "    ws._bufferedMessages = null;\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "// ===============================================================================================\n"+
-  "// Handling of incoming messages\n"+
-  "\n"+
-  "var msgHandlers = {};\n"+
-  "\n"+
-  "Sock.prototype.handleMsg = function(msg, payload) {\n"+
-  "  // console.log('handleMsg:', String.fromCharCode(msg.t), msg, 'payload:', payload);\n"+
-  "  var msgHandler = msgHandlers[msg.t];\n"+
-  "  if (!msgHandler) {\n"+
-  "    if (s.ws) {\n"+
-  "      s.ws._gotalkCloseError = ErrInvalidMsg;\n"+
-  "    }\n"+
-  "    s.closeError(protocol.ErrorInvalidMsg);\n"+
-  "  } else {\n"+
-  "    msgHandler.call(this, msg, payload);\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "msgHandlers[protocol.MsgTypeSingleReq] = function (msg, payload) {\n"+
-  "  var s = this, handler, result;\n"+
-  "  handler = s.handlers.findRequestHandler(msg.name);\n"+
-  "\n"+
-  "  result = function (outbuf) {\n"+
-  "    s.sendMsg(protocol.MsgTypeSingleRes, msg.id, null, 0, outbuf);\n"+
-  "  };\n"+
-  "  result.error = function (err) {\n"+
-  "    var errstr = err.message || String(err);\n"+
-  "    s.sendMsg(protocol.MsgTypeErrorRes, msg.id, null, 0, errstr);\n"+
-  "  };\n"+
-  "\n"+
-  "  if (typeof handler !== 'function') {\n"+
-  "    result.error('no such operation \"'+msg.name+'\"');\n"+
-  "  } else {\n"+
-  "    try {\n"+
-  "      handler(payload, result, msg.name);\n"+
-  "    } catch (err) {\n"+
-  "      if (typeof console !== 'undefined') { console.error(err.stack || err); }\n"+
-  "      result.error('internal error');\n"+
-  "    }\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "function handleRes(msg, payload) {\n"+
-  "  var id = typeof msg.id === 'string' ? msg.id : msg.id.toString();\n"+
-  "  var s = this, callback = s.pendingRes[id];\n"+
-  "  if (msg.t !== protocol.MsgTypeStreamRes || !payload || (payload.length || payload.size) === 0) {\n"+
-  "    delete s.pendingRes[id];\n"+
-  "    if (s.pendingClose && !s.hasPendingRes) {\n"+
-  "      s.end();\n"+
-  "    }\n"+
-  "  }\n"+
-  "  if (typeof callback !== 'function') {\n"+
-  "    return; // ignore message\n"+
-  "  }\n"+
-  "  if (msg.t === protocol.MsgTypeErrorRes) {\n"+
-  "    callback(new Error(String(payload)), null);\n"+
-  "  } else {\n"+
-  "    callback(null, payload);\n"+
-  "  }\n"+
-  "}\n"+
-  "\n"+
-  "msgHandlers[protocol.MsgTypeSingleRes] = handleRes;\n"+
-  "msgHandlers[protocol.MsgTypeStreamRes] = handleRes;\n"+
-  "msgHandlers[protocol.MsgTypeErrorRes] = handleRes;\n"+
-  "\n"+
-  "msgHandlers[protocol.MsgTypeNotification] = function (msg, payload) {\n"+
-  "  var s = this, handler = s.handlers.findNotificationHandler(msg.name);\n"+
-  "  if (handler) {\n"+
-  "    handler(payload, msg.name);\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "msgHandlers[protocol.MsgTypeHeartbeat] = function (msg) {\n"+
-  "  this.emit('heartbeat', {time:new Date(msg.size * 1000), load:msg.wait});\n"+
-  "};\n"+
-  "\n"+
-  "// ===============================================================================================\n"+
-  "// Sending messages\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.sendMsg = function(t, id, name, wait, payload) {\n"+
-  "  var payloadSize = (payload && typeof payload === 'string' && this.protocol === protocol.binary) ?\n"+
-  "    utf8.sizeOf(payload) :\n"+
-  "    payload ? payload.length || payload.size :\n"+
-  "    0;\n"+
-  "  var s = this, buf = s.protocol.makeMsg(t, id, name, wait, payloadSize);\n"+
-  "  // console.log('sendMsg(',t,id,name,payload,'): protocol.makeMsg =>',\n"+
-  "  //   typeof buf === 'string' ? buf : buf.toString());\n"+
-  "  try {\n"+
-  "    s.ws.send(buf);\n"+
-  "    if (payloadSize !== 0) {\n"+
-  "      s.ws.send(payload);\n"+
-  "    }\n"+
-  "  } catch (err) {\n"+
-  "    if (!this.ws || this.ws.readyState > WebSocket.OPEN) {\n"+
-  "      err = new Error('socket is closed');\n"+
-  "    }\n"+
-  "    throw err;\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.closeError = function(code) {\n"+
-  "  var s = this, buf;\n"+
-  "  if (s.ws) {\n"+
-  "    try {\n"+
-  "      s.ws.send(s.protocol.makeMsg(protocol.MsgTypeProtocolError, null, null, 0, code));\n"+
-  "    } catch (e) {}\n"+
-  "    s.ws.close(4000 + code);\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "var zeroes = '0000';\n"+
-  "\n"+
-  "// callback function(Error, outbuf)\n"+
-  "Sock.prototype.bufferRequest = function(op, buf, callback) {\n"+
-  "  var s = this, id = s.nextOpID++;\n"+
-  "  if (s.nextOpID === 1679616) {\n"+
-  "    // limit for base36 within 4 digits (36^4=1679616)\n"+
-  "    s.nextOpID = 0;\n"+
-  "  }\n"+
-  "  id = id.toString(36);\n"+
-  "  id = zeroes.substr(0, 4 - id.length) + id;\n"+
-  "\n"+
-  "  s.pendingRes[id] = callback;\n"+
-  "  try {\n"+
-  "    s.sendMsg(protocol.MsgTypeSingleReq, id, op, 0, buf);\n"+
-  "  } catch (err) {\n"+
-  "    delete s.pendingRes[id];\n"+
-  "    callback(err);\n"+
-  "  }\n"+
-  "}\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.bufferNotify = function(name, buf) {\n"+
-  "  s.sendMsg(protocol.MsgTypeNotification, null, name, 0, buf);\n"+
-  "}\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.request = function(op, value, callback) {\n"+
-  "  var buf;\n"+
-  "  if (!callback) {\n"+
-  "    // no value\n"+
-  "    callback = value;\n"+
-  "  } else {\n"+
-  "    buf = JSON.stringify(value);\n"+
-  "  }\n"+
-  "  return this.bufferRequest(op, buf, function (err, buf) {\n"+
-  "    var value = decodeJSON(buf);\n"+
-  "    return callback(err, value);\n"+
-  "  });\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.notify = function(op, value) {\n"+
-  "  var buf = JSON.stringify(value);\n"+
-  "  return this.bufferNotify(op, buf);\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "// ===============================================================================================\n"+
-  "\n"+
-  "// Represents a stream request.\n"+
-  "// Response(s) arrive by the \"data\"(buf) event. When the response is complete, a \"end\"(error)\n"+
-  "// event is emitted, where error is non-empty if the request failed.\n"+
-  "var StreamRequest = function(s, op, id) {\n"+
-  "  return Object.create(StreamRequest.prototype, {\n"+
-  "    s:          {value:s},\n"+
-  "    op:         {value:op, enumerable:true},\n"+
-  "    id:         {value:id, enumerable:true},\n"+
-  "    onresponse: {value:function(){}, enumerable:true, write:true}\n"+
-  "  });\n"+
-  "};\n"+
-  "\n"+
-  "EventEmitter.mixin(StreamRequest.prototype);\n"+
-  "\n"+
-  "StreamRequest.prototype.write = function (buf) {\n"+
-  "  if (!this.ended) {\n"+
-  "    if (!this.started) {\n"+
-  "      this.started = true;\n"+
-  "      this.s.sendMsg(protocol.MsgTypeStreamReq, this.id, this.op, 0, buf);\n"+
-  "    } else {\n"+
-  "      this.s.sendMsg(protocol.MsgTypeStreamReqPart, this.id, null, 0, buf);\n"+
-  "    }\n"+
-  "    if (!buf || buf.length === 0 || buf.size === 0) {\n"+
-  "      this.ended = true;\n"+
-  "    }\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "// Finalize the request\n"+
-  "StreamRequest.prototype.end = function () {\n"+
-  "  this.write(null);\n"+
-  "};\n"+
-  "\n"+
-  "Sock.prototype.streamRequest = function(op) {\n"+
-  "  var s = this, id = s.nextStreamID++;\n"+
-  "  if (s.nextStreamID === 46656) {\n"+
-  "    // limit for base36 within 3 digits (36^3=46656)\n"+
-  "    s.nextStreamID = 0;\n"+
-  "  }\n"+
-  "  id = id.toString(36);\n"+
-  "  id = '!' + zeroes.substr(0, 3 - id.length) + id;\n"+
-  "\n"+
-  "  var req = StreamRequest(s, op, id);\n"+
-  "\n"+
-  "  s.pendingRes[id] = function (err, buf) {\n"+
-  "    if (err) {\n"+
-  "      req.emit('end', err);\n"+
-  "    } else if (!buf || buf.length === 0) {\n"+
-  "      req.emit('end', null);\n"+
-  "    } else {\n"+
-  "      req.emit('data', buf);\n"+
-  "    }\n"+
-  "  };\n"+
-  "\n"+
-  "  return req;\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "// ===============================================================================================\n"+
-  "\n"+
-  "function Handlers() { return Object.create(Handlers.prototype, {\n"+
-  "  reqHandlers:         {value:{}},\n"+
-  "  reqFallbackHandler:  {value:null, writable:true},\n"+
-  "  noteHandlers:        {value:{}},\n"+
-  "  noteFallbackHandler: {value:null, writable:true}\n"+
-  "}); }\n"+
-  "exports.Handlers = Handlers;\n"+
-  "\n"+
-  "\n"+
-  "Handlers.prototype.handleBufferRequest = function(op, handler) {\n"+
-  "  if (!op) {\n"+
-  "    this.reqFallbackHandler = handler;\n"+
-  "  } else {\n"+
-  "    this.reqHandlers[op] = handler;\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "Handlers.prototype.handleRequest = function(op, handler) {\n"+
-  "  return this.handleBufferRequest(op, function (buf, result, op) {\n"+
-  "    var resultWrapper = function(value) {\n"+
-  "      return result(JSON.stringify(value));\n"+
-  "    };\n"+
-  "    resultWrapper.error = result.error;\n"+
-  "    var value = decodeJSON(buf);\n"+
-  "    handler(value, resultWrapper, op);\n"+
-  "  });\n"+
-  "};\n"+
-  "\n"+
-  "Handlers.prototype.handleBufferNotification = function(name, handler) {\n"+
-  "  if (!name) {\n"+
-  "    this.noteFallbackHandler = handler;\n"+
-  "  } else {\n"+
-  "    this.noteHandlers[name] = handler;\n"+
-  "  }\n"+
-  "};\n"+
-  "\n"+
-  "Handlers.prototype.handleNotification = function(name, handler) {\n"+
-  "  this.handleBufferNotification(name, function (buf, name) {\n"+
-  "    handler(decodeJSON(buf), name);\n"+
-  "  });\n"+
-  "};\n"+
-  "\n"+
-  "Handlers.prototype.findRequestHandler = function(op) {\n"+
-  "  var handler = this.reqHandlers[op];\n"+
-  "  return handler || this.reqFallbackHandler;\n"+
-  "};\n"+
-  "\n"+
-  "Handlers.prototype.findNotificationHandler = function(name) {\n"+
-  "  var handler = this.noteHandlers[name];\n"+
-  "  return handler || this.noteFallbackHandler;\n"+
-  "};\n"+
-  "\n"+
-  "// ===============================================================================================\n"+
-  "\n"+
-  "function openWebSocket(s, addr, callback) {\n"+
-  "  var ws;\n"+
-  "  try {\n"+
-  "    ws = new WebSocket(addr);\n"+
-  "    ws.binaryType = 'arraybuffer';\n"+
-  "    ws.onclose = function (ev) {\n"+
-  "      var err = new Error('connection failed');\n"+
-  "      if (callback) callback(err);\n"+
-  "    };\n"+
-  "    ws.onopen = function(ev) {\n"+
-  "      ws.onerror = undefined;\n"+
-  "      s.adoptWebSocket(ws);\n"+
-  "      s.handshake();\n"+
-  "      if (callback) callback(null, s);\n"+
-  "      s.emit('open');\n"+
-  "      s.startReading();\n"+
-  "    };\n"+
-  "    ws.onmessage = function(ev) {\n"+
-  "      if (!ws._bufferedMessages) ws._bufferedMessages = [];\n"+
-  "      ws._bufferedMessages.push(ev.data);\n"+
-  "    };\n"+
-  "  } catch (err) {\n"+
-  "    if (callback) callback(err);\n"+
-  "    s.emit('close', err);\n"+
-  "  }\n"+
-  "}\n"+
-  "\n"+
-  "\n"+
-  "// gotalk.defaultResponderAddress is defined if the responder has announced a default address\n"+
-  "// to which connect to.\n"+
-  "if (window.gotalkResponderAt !== undefined) {\n"+
-  "  var at = window.gotalkResponderAt;\n"+
-  "  delete window.gotalkResponderAt;\n"+
-  "  if (at && at.ws) {\n"+
-  "    gotalk.defaultResponderAddress = 'ws://' + document.location.host + at.ws;\n"+
-  "  }\n"+
-  "}\n"+
-  "\n"+
-  "\n"+
-  "Sock.prototype.open = function(addr, callback) {\n"+
-  "  var s = this;\n"+
-  "  if (!callback && typeof addr == 'function') {\n"+
-  "    callback = addr;\n"+
-  "    addr = null;\n"+
-  "  }\n"+
-  "\n"+
-  "  if (!addr) {\n"+
-  "    if (!gotalk.defaultResponderAddress) {\n"+
-  "      throw new Error('address not specified (responder has not announced any default address)')\n"+
-  "    }\n"+
-  "    addr = gotalk.defaultResponderAddress;\n"+
-  "  }\n"+
-  "\n"+
-  "  if (addr.substr(0,3) === 'ws:') {\n"+
-  "    openWebSocket(s, addr, callback);\n"+
-  "  } else {\n"+
-  "    throw new Error('unsupported address');\n"+
-  "  }\n"+
-  "  return s;\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "// Open a connection to a gotalk responder.\n"+
-  "// \n"+
-  "// open(addr string[, onConnect(Error, Sock)]) -> Sock\n"+
-  "//   Connect to gotalk responder at `addr`\n"+
-  "//\n"+
-  "// open([onConnect(Error, Sock)]) -> Sock\n"+
-  "//   Connect to default gotalk responder.\n"+
-  "//   Throws an error if `gotalk.defaultResponderAddress` isn't defined.\n"+
-  "//\n"+
-  "gotalk.open = function(addr, onConnect) {\n"+
-  "  var s = Sock(gotalk.defaultHandlers);\n"+
-  "  s.open(addr, onConnect);\n"+
-  "  return s;\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "// If `addr` is not provided, `gotalk.defaultResponderAddress` is used instead.\n"+
-  "Sock.prototype.openKeepAlive = function(addr) {\n"+
-  "  var s = this;\n"+
-  "  if (s.keepalive) {\n"+
-  "    s.keepalive.disable();\n"+
-  "  }\n"+
-  "  s.keepalive = keepalive(s, addr);\n"+
-  "  s.keepalive.enable();\n"+
-  "  return s;\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "// Returns a new Sock with a persistent connection to a gotalk responder.\n"+
-  "// The Connection is automatically kept alive (by reconnecting) until Sock.end() is called.\n"+
-  "// If `addr` is not provided, `gotalk.defaultResponderAddress` is used instead.\n"+
-  "gotalk.connection = function(addr) {\n"+
-  "  var s = Sock(gotalk.defaultHandlers);\n"+
-  "  s.openKeepAlive(addr);\n"+
-  "  return s;\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "gotalk.defaultHandlers = Handlers();\n"+
-  "\n"+
-  "gotalk.handleBufferRequest = function(op, handler) {\n"+
-  "  return gotalk.defaultHandlers.handleBufferRequest(op, handler);\n"+
-  "};\n"+
-  "\n"+
-  "gotalk.handle = function(op, handler) {\n"+
-  "  return gotalk.defaultHandlers.handleRequest(op, handler);\n"+
-  "};\n"+
-  "\n"+
-  "gotalk.handleBufferNotification = function (name, handler) {\n"+
-  "  return gotalk.defaultHandlers.handleBufferNotification(name, handler);\n"+
-  "};\n"+
-  "\n"+
-  "gotalk.handleNotification = function (name, handler) {\n"+
-  "  return gotalk.defaultHandlers.handleNotification(name, handler);\n"+
-  "};\n"+
-  "\n"+
-  "// -----------------------------------------------------------------------------------------------\n"+
-  "\n"+
-  "\n"+
-  "\n"+
-  "};\n"+
-  "\n"+
-  "\n"+
-  "__mainapi = {exports:{}};\n"+
-  "__main(__mainapi);\n"+
-  "\n"+
-  "global.gotalk = __mainapi.exports;\n"+
-  "})(typeof window !== \"undefined\" ? window : this);\n"+
-  ""
+const BrowserLibString = `
+(function(global){
+"use strict";
+
+var __mod = {}, __api = {}, __main, __mainapi;
+var evalDepth = 0;
+
+var require = function(name) {
+  var m, id = name.replace(new RegExp("/^.\//"), "");
+  m = __api[id];
+  //console.log('require', {name:name, id:id, exports:m});
+  if (!m) {
+    var prefix = ''; for (var i = 0; i < evalDepth; i++) {
+      prefix += '. ';
+    }
+    var f = __mod[id];
+    if (f && evalDepth < 100) {
+      __mod[id] = null;
+      __api[id] = {exports:{}};
+      ++evalDepth;
+      f(__api[id]);
+      --evalDepth;
+      __api[id] = __api[id].exports;
+    }
+    m = __api[id];
+  }
+  return m;
+};
+
+__mod["EventEmitter"]=function(module) { var exports = module.exports;
+
+function EventEmitter() {}
+module.exports = EventEmitter;
+
+EventEmitter.prototype.addListener = function (type, listener) {
+  if (typeof listener !== 'function') throw TypeError('listener must be a function');
+  if (!this.__events) {
+    Object.defineProperty(this, '__events', {value:{}, enumerable:false, writable:true});
+    this.__events[type] = [listener];
+    return this;
+  }
+  var listeners = this.__events[type];
+  if (listeners === undefined) {
+    this.__events[type] = [listener];
+    return this;
+  }
+  listeners.push(listener);
+  return this;
+};
+
+EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+EventEmitter.prototype.once = function (type, listener) {
+  var fired = false;
+  var trigger_event_once = function() {
+    this.removeListener(type, trigger_event_once);
+    if (!fired) {
+      fired = true;
+      listener.apply(this, arguments);
+    }
+  }
+  return this.on(type, trigger_event_once);
+};
+
+EventEmitter.prototype.removeListener = function (type, listener) {
+  var p, listeners = this.__events ? this.__events[type] : undefined;
+  if (listeners !== undefined) {
+    while ((p = listeners.indexOf(listener)) !== -1) {
+      listeners.splice(p,1);
+    }
+    if (listeners.length === 0) {
+      delete this.__events[type];
+    }
+    return listeners.length;
+  }
+  return this;
+};
+
+EventEmitter.prototype.removeAllListeners = function (type) {
+  if (this.__events) {
+    if (type) {
+      delete this.__events[type];
+    } else {
+      delete this.__events;
+    }
+  }
+};
+
+EventEmitter.prototype.listeners = function (type) {
+  return type ? (this.__events ? this.__events[type] : undefined) : this.__events;
+};
+
+EventEmitter.prototype.emit = function (type) {
+  var listeners = this.__events ? this.__events[type] : undefined;
+  if (listeners === undefined) {
+    return false;
+  }
+  var i = 0, L = listeners.length, args = Array.prototype.slice.call(arguments,1);
+  for (; i !== L; ++i) {
+    if (!listeners[i]) {
+      console.log('e', type, i, args);
+    }
+    listeners[i].apply(this, args);
+  }
+  return true;
+};
+
+EventEmitter.mixin = function mixin(obj) {
+  var proto = obj;
+  while (proto) {
+    if (proto.__proto__ === Object.prototype) {
+      proto.__proto__ = EventEmitter.prototype;
+      return obj;
+    }
+    proto = proto.__proto__;
+  }
+  return obj;
+};
+
+
+};
+
+__mod["buf"]=function(module) { var exports = module.exports;
+"use strict";
+var Buf;
+
+if (typeof Uint8Array !== 'undefined') {
+
+var utf8 = require('./utf8');
+
+Uint8Array.prototype.toString = function (encoding, start, end) {
+  // assumes buffer contains UTF8-encoded text
+  return utf8.decode(this, start, end);
+};
+
+Uint8Array.prototype.slice = Uint8Array.prototype.subarray;
+
+// Copies data from a region of this buffer to a region in the target buffer.
+// copy(targetBuffer, [targetStart], [sourceStart], [sourceEnd]) -> Buf
+Uint8Array.prototype.copy = function (targetBuffer, targetStart, sourceStart, sourceEnd) {
+  var srcBuf = this;
+  if (sourceStart) {
+    srcBuf = srcBuf.slice(sourceStart, sourceEnd || srcBuf.length - sourceStart);
+  }
+  targetBuffer.set(srcBuf, targetStart || 0);
+};
+
+
+// Buf(Buf) -> Buf
+// Buf(size int) -> Buf
+// Buf(ArrayBuffer) -> Buf
+Buf = function Buf(v) {
+  return v instanceof Uint8Array ? v :
+    new Uint8Array(
+      v instanceof ArrayBuffer ? v :
+      new ArrayBuffer(v)
+    );
+};
+
+Buf.isBuf = function (v) {
+  return v instanceof Uint8Array;
+};
+
+Buf.fromString = function (s, encoding) {
+  return utf8.encode(s, Buf);
+};
+
+}
+
+module.exports = Buf;
+
+};
+
+__mod["keepalive"]=function(module) { var exports = module.exports;
+"use strict";
+// Stay connected by automatically reconnecting w/ exponential back-off.
+
+var netAccess = require('./netaccess');
+var protocol = require('./protocol');
+
+// "s" must conform to interface { connect(addr string, cb function(Error)) }
+// Returns an object {
+//   isConnected bool  // true if currently connected
+//   isEnabled bool    // true if enabled
+//   enable()          // enables staying connected
+//   disable()         // disables trying to stay connected
+// }
+var keepalive = function(s, addr, minReconnectDelay, maxReconnectDelay) {
+  if (!minReconnectDelay) {
+    minReconnectDelay = 500;
+  } else if (minReconnectDelay < 100) {
+    minReconnectDelay = 100;
+  }
+
+  if (!maxReconnectDelay || maxReconnectDelay < minReconnectDelay) {
+    maxReconnectDelay = 5000;
+  }
+
+  var ctx, open, retry, delay = 0, openTimer, opentime;
+
+  ctx = {
+    isEnabled: false,
+    isConnected: false,
+    enable: function() {
+      if (!ctx.enabled) {
+        ctx.enabled = true;
+        delay = 0;
+        if (!ctx.isConnected) {
+          open();
+        }
+      }
+    },
+    disable: function() {
+      if (ctx.enabled) {
+        clearTimeout(openTimer);
+        ctx.enabled = false;
+        delay = 0;
+      }
+    }
+  };
+
+  open = function() {
+    clearTimeout(openTimer);
+    s.open(addr, function(err) {
+      opentime = new Date;
+      if (err) {
+        retry(err);
+      } else {
+        delay = 0;
+        ctx.isConnected = true;
+        s.once('close', retry);
+      }
+    });
+  };
+
+  retry = function(err) {
+    clearTimeout(openTimer);
+    ctx.isConnected = false;
+    if (!ctx.enabled) {
+      return;
+    }
+    if (netAccess.available && !netAccess.onLine && 
+        !(typeof document !== 'undefined' &&
+          document.location &&
+          document.location.hostname !== 'localhost' &&
+          document.location.hostname !== '127.0.0.1' &&
+          document.location.hostname !== '[::1]') )
+    {
+      netAccess.once('online', retry);
+      delay = 0;
+      return;
+    }
+    if (err) {
+      if (err.isGotalkProtocolError) {
+        if (err.code === protocol.ErrorTimeout) {
+          delay = 0;
+        } else {
+          // We shouldn't retry with the same version of our gotalk library.
+          // However, the only sensible thing to do in this case is to let the user code react to
+          // the error passed to the close event (e.g. to show a "can't talk to server" UI), and
+          // retry in maxReconnectDelay.
+          // User code can choose to call "disable()" on its keepalive object in this case.
+          delay = maxReconnectDelay;
+        }
+      } else {
+        // increase back off in case of an error
+        delay = delay ? Math.min(maxReconnectDelay, delay * 2) : minReconnectDelay;
+      }
+    } else {
+      delay = Math.max(0, minReconnectDelay - ((new Date) - opentime));
+    }
+    openTimer = setTimeout(open, delay);
+  };
+
+  return ctx;
+};
+
+module.exports = keepalive;
+
+};
+
+__mod["netaccess"]=function(module) { var exports = module.exports;
+"use strict";
+var EventEmitter = require('./EventEmitter');
+var m;
+
+if (typeof global !== 'undefined' && global.addEventListener) {
+  m = Object.create(EventEmitter.prototype, {
+    available: {value:true, enumerable:true},
+    onLine:    {value:true, enumerable:true, writable:true}
+  });
+
+  if (typeof navigator !== 'undefined') {
+    m.onLine = navigator.onLine;
+  }
+
+  global.addEventListener("offline", function (ev) {
+    m.onLine = false;
+    m.emit('offline');
+  });
+
+  global.addEventListener("online", function (ev) {
+    m.onLine = true;
+    m.emit('online');
+  });
+
+} else {
+  m = {available:false, onLine:true};
+}
+
+module.exports = m;
+
+};
+
+__mod["protocol"]=function(module) { var exports = module.exports;
+"use strict";
+var Buf = require('./buf');
+var utf8 = require('./utf8');
+
+// Version of this protocol
+exports.Version = 1;
+
+// Message types
+var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     'r'.charCodeAt(0),
+    MsgTypeStreamReq     = exports.MsgTypeStreamReq =     's'.charCodeAt(0),
+    MsgTypeStreamReqPart = exports.MsgTypeStreamReqPart = 'p'.charCodeAt(0),
+    MsgTypeSingleRes     = exports.MsgTypeSingleRes =     'R'.charCodeAt(0),
+    MsgTypeStreamRes     = exports.MsgTypeStreamRes =     'S'.charCodeAt(0),
+    MsgTypeErrorRes      = exports.MsgTypeErrorRes =      'E'.charCodeAt(0),
+    MsgTypeRetryRes      = exports.MsgTypeRetryRes =      'e'.charCodeAt(0),
+    MsgTypeNotification  = exports.MsgTypeNotification =  'n'.charCodeAt(0),
+    MsgTypeHeartbeat     = exports.MsgTypeHeartbeat =     'h'.charCodeAt(0),
+    MsgTypeProtocolError = exports.MsgTypeProtocolError = 'f'.charCodeAt(0);
+
+// ProtocolError codes
+exports.ErrorAbnormal    = 0
+exports.ErrorUnsupported = 1;
+exports.ErrorInvalidMsg  = 2;
+exports.ErrorTimeout     = 3;
+
+// Maximum value of a heartbeat's "load"
+exports.HeartbeatMsgMaxLoad = 0xffff;
+
+// ==============================================================================================
+// Binary (byte) protocol
+
+function copyBufFixnum(b, start, n, digits) {
+  var i = start || 0, y = 0, c, s = n.toString(16), z = digits - s.length;
+  for (; z--;) { b[i++] = 48; }
+  for (; !isNaN(c = s.charCodeAt(y++));) { b[i++] = c; }
+}
+
+function makeBufFixnum(n, digits) {
+  var b = Buf(digits);
+  copyBufFixnum(b, 0, n, digits);
+  return b;
+}
+
+// Note: This code assumes parseInt accepts a Buf
+
+exports.binary = {
+
+  makeFixnum: makeBufFixnum,
+
+  versionBuf: makeBufFixnum(exports.Version, 2),
+
+  parseVersion: function (b) {
+    return parseInt(b, 16);
+  },
+
+  // Parses a byte buffer containing a message (not including payload data.)
+  // If t is MsgTypeHeartbeat, wait==load, size==time.
+  // -> {t:string, id:Buf, name:string, wait:int size:int} | null
+  parseMsg: function (b) {
+    var t, id, name, namez, wait = 0, size = 0, z;
+
+    t = b[0];
+    z = 1;
+
+    if (t === MsgTypeHeartbeat) {
+      wait = parseInt(b.slice(z, z + 4), 16);
+      z += 4;
+    } else if (t !== MsgTypeNotification && t !== MsgTypeProtocolError) {
+      id = b.slice(z, z + 4);
+      z += 4;
+    }
+
+    if (t == MsgTypeSingleReq || t == MsgTypeStreamReq || t == MsgTypeNotification) {
+      namez = parseInt(b.slice(z, z + 3), 16);
+      z += 3;
+      name = b.slice(z, z+namez).toString();
+      z += namez;
+    } else if (t === MsgTypeRetryRes) {
+      wait = parseInt(b.slice(z, z + 8), 16);
+      z += 8
+    }
+
+    size = parseInt(b.slice(z, z + 8), 16);
+
+    return {t:t, id:id, name:name, wait:wait, size:size};
+  },
+
+  // Create a buf representing a message (w/o any payload)
+  makeMsg: function (t, id, name, wait, size) {
+    var b, nameb, z = id ? 13 : 9;
+
+    if (name && name.length !== 0) {
+      nameb = Buf.fromString(name);
+      z += 3 + nameb.length;
+    }
+
+    b = Buf(z);
+
+    b[0] = t;
+    z = 1;
+
+    if (id && id.length === 4) {
+      if (typeof id === 'string') {
+        b[1] = id.charCodeAt(0);
+        b[2] = id.charCodeAt(1);
+        b[3] = id.charCodeAt(2);
+        b[4] = id.charCodeAt(3);
+      } else {
+        b[1] = id[0];
+        b[2] = id[1];
+        b[3] = id[2];
+        b[4] = id[3];
+      }
+      z += 4;
+    }
+
+    if (name && name.length !== 0) {
+      nameb = Buf.fromString(name);
+      copyBufFixnum(b, z, nameb.length, 3);
+      z += 3;
+      nameb.copy(b, z);
+      z += nameb.length;
+    }
+
+    if (t === MsgTypeRetryRes) {
+      copyBufFixnum(b, z, wait, 8);
+      z += 8
+    }
+
+    copyBufFixnum(b, z, size, 8);
+
+    return b;
+  },
+
+  // Create a buf representing a heartbeat message
+  makeHeartbeatMsg: function(load) {
+    var b = Buf(13), z = 1;
+    b[0] = MsgTypeHeartbeat;
+    copyBufFixnum(b, z, load, 4);
+    z += 4;
+    copyBufFixnum(b, z, Math.round((new Date).getTime()/1000), 8);
+    z += 8;
+    return b;
+  }
+};
+
+
+// ==============================================================================================
+// Text protocol
+
+var zeroes = '00000000';
+
+function makeStrFixnum(n, digits) {
+  var s = n.toString(16);
+  return zeroes.substr(0, digits - s.length) + s;
+}
+
+exports.text = {
+
+  makeFixnum: makeStrFixnum,
+
+  versionBuf: makeStrFixnum(exports.Version, 2),
+
+  parseVersion: function (buf) {
+    return parseInt(buf.substr(0,2), 16);
+  },
+
+  // Parses a text string containing a message (not including payload data.)
+  // If t is MsgTypeHeartbeat, wait==load, size==time.
+  // -> {t:string, id:Buf, name:string, wait:int size:int} | null
+  parseMsg: function (s) {
+    // "r001004echo00000005" => ('r', "001", "echo", 5)
+    // "R00100000005"        => ('R', "001", "", 5)
+    var t, id, name, wait = 0, size = 0, z;
+
+    t = s.charCodeAt(0);
+    z = 1;
+
+    if (t === MsgTypeHeartbeat) {
+      wait = parseInt(s.substr(z, 4), 16);
+      z += 4;
+    } else if (t !== MsgTypeNotification && t !== MsgTypeProtocolError) {
+      id = s.substr(z, 4);
+      z += 4;
+    }
+
+    if (t == MsgTypeSingleReq || t == MsgTypeStreamReq || t == MsgTypeNotification) {
+      name = s.substring(z + 3, s.length - 8);
+    } else if (t == MsgTypeRetryRes) {
+      wait = parseInt(s.substr(z, 8), 16);
+      z += 8
+    }
+
+    size = parseInt(s.substr(s.length - 8), 16);
+
+    return {t:t, id:id, name:name, wait:wait, size:size};
+  },
+
+
+  // Create a text string representing a message (w/o any payload.)
+  makeMsg: function (t, id, name, wait, size) {
+    var b = String.fromCharCode(t);
+
+    if (id && id.length === 4) {
+      b += id;
+    }
+
+    if (name && name.length !== 0) {
+      b += makeStrFixnum(utf8.sizeOf(name), 3);
+      b += name;
+    }
+
+    if (t === MsgTypeRetryRes) {
+      b += makeStrFixnum(wait, 8);
+    }
+
+    b += makeStrFixnum(size, 8);
+
+    return b;
+  },
+
+  // Create a text string representing a heartbeat message
+  makeHeartbeatMsg: function(load) {
+    var s = String.fromCharCode(MsgTypeHeartbeat);
+    s += makeStrFixnum(load, 4);
+    s += makeStrFixnum(Math.round((new Date).getTime()/1000), 8);
+    return s;
+  }
+
+}; // exports.text
+
+
+};
+
+__mod["utf8"]=function(module) { var exports = module.exports;
+"use strict";
+//
+// decode(Buf, [start], [end]) -> String
+// encode(String, BufFactory) -> Buf
+// sizeOf(String) -> int
+//
+
+// Returns the number of bytes needed to represent string "s" as UTF8
+function sizeOf(s) {
+  var z = 0, i = 0, c;
+  for (; c = s.charCodeAt(i++); z += (c >> 11 ? 3 : c >> 7 ? 2 : 1) );
+  return z;
+}
+exports.sizeOf = sizeOf;
+
+function mask8(c) {
+  return 0xff & c;
+}
+
+if (typeof TextDecoder !== 'undefined') {
+  // ============================================================================================
+  // Native TextDecoder/TextEncoder implementation
+  var decoder = new TextDecoder('utf8');
+  var encoder = new TextEncoder('utf8');
+
+  exports.decode = function decode(b, start, end) {
+    if (start || end) {
+      if (!start) start = 0;
+      b = b.slice(start, end || b.length - start);
+    }
+    return decoder.decode(b);
+  };
+
+  exports.encode = function encode(s, Buf) {
+    return Buf(encoder.encode(s));
+  };
+
+} else {
+  // ============================================================================================
+  // JS implementation
+
+  exports.decode = function decode(b, start, end) {
+    var i = start || 0, e = (end || b.length - i), c, lead, s = '';
+    for (i = 0; i < e; ) {
+      c = b[i++];
+      lead = mask8(c);
+      if (lead < 0x80) {
+        // single byte
+      } else if ((lead >> 5) == 0x6) {
+        c = ((c << 6) & 0x7ff) + (b[i++] & 0x3f);
+      } else if ((lead >> 4) == 0xe) {
+        c = ((c << 12) & 0xffff) + ((mask8(b[i++]) << 6) & 0xfff);
+        c += b[i++] & 0x3f;
+      } else if ((lead >> 3) == 0x1e) {
+        c = ((c << 18) & 0x1fffff) + ((mask8(b[i++]) << 12) & 0x3ffff);
+        c += (mask8(b[i++]) << 6) & 0xfff;
+        c += b[i++] & 0x3f;
+      }
+      s += String.fromCharCode(c);
+    }
+
+    return s;
+  };
+
+  exports.encode = function encode(s, Buf) {
+    var i = 0, e = s.length, c, j = 0, b = Buf(sizeOf(s));
+    for (; i !== e;) {
+      c = s.charCodeAt(i++);
+      // TODO FIXME: charCodeAt returns UTF16-like codepoints, not UTF32 codepoints, meaning that
+      // this code only works for BMP. However, current ES only supports BMP. Ultimately we should
+      // dequeue a second UTF16 codepoint when c>BMP.
+      if (c < 0x80) {
+        b[j++] = c;
+      } else if (c < 0x800) {
+        b[j++] = (c >> 6)   | 0xc0;
+        b[j++] = (c & 0x3f) | 0x80;
+      } else if (c < 0x10000) {
+        b[j++] = (c >> 12)          | 0xe0;
+        b[j++] = ((c >> 6) & 0x3f)  | 0x80;
+        b[j++] = (c & 0x3f)         | 0x80;
+      } else {
+        b[j++] = (c >> 18)          | 0xf0;
+        b[j++] = ((c >> 12) & 0x3f) | 0x80;
+        b[j++] = ((c >> 6) & 0x3f)  | 0x80;
+        b[j++] = (c & 0x3f)         | 0x80;
+      }
+    }
+    return b;
+  };
+
+}
+
+// var s = '∆åßf'; // '日本語'
+// var b = exports.encode(s);
+// console.log('encode("'+s+'") =>', b);
+// console.log('decode(',b,') =>', exports.decode(b));
+
+};
+
+__main=function(module) { var exports = module.exports;
+"use strict";
+var protocol = require('./protocol'),
+      txt = protocol.text,
+      bin = protocol.binary;
+var Buf = require('./buf');
+var utf8 = require('./utf8');
+var EventEmitter = require('./EventEmitter');
+var keepalive = require('./keepalive');
+
+var gotalk = exports;
+
+gotalk.protocol = protocol;
+gotalk.Buf = Buf;
+
+function decodeJSON(v) {
+  var value;
+  try {
+    value = JSON.parse(v);
+  } catch (e) {
+    // console.warn('failed to decode JSON "'+(typeof v === 'string' ? v : v.toString())+'":',e);
+  }
+  return value;
+}
+
+
+// ===============================================================================================
+
+function Sock(handlers) { return Object.create(Sock.prototype, {
+  // Public properties
+  handlers:      {value:handlers, enumerable:true},
+  protocol:      {value: Buf ? protocol.binary : protocol.text, enumerable:true, writable:true},
+  heartbeatInterval: {value: 20 * 1000, enumerable:true, writable:true},
+
+  // Internal
+  ws:            {value:null, writable:true},
+  keepalive:     {value:null, writable:true},
+
+  // Used for performing requests
+  nextOpID:      {value:0, writable:true},
+  nextStreamID:  {value:0, writable:true},
+  pendingRes:    {value:{}, writable:true},
+  hasPendingRes: {get:function(){ for (var k in this.pendingRes) { return true; } }},
+
+  // True if end() has been called while there were outstanding responses
+  pendingClose:  {value:false, writable:true}
+}); }
+
+Sock.prototype = EventEmitter.mixin(Sock.prototype);
+exports.Sock = Sock;
+
+
+var resetSock = function(s, causedByErr) {
+  s.pendingClose = false;
+
+  if (s.ws) {
+    s.ws.onmessage = null;
+    s.ws.onerror = null;
+    s.ws.onclose = null;
+    s.ws = null;
+  }
+
+  s.nextOpID = 0;
+  if (s.hasPendingRes) {
+    var err = causedByErr || new Error('connection closed');
+    // TODO: return a RetryResult kind of error instead of just an error
+    for (var k in s.pendingRes) {
+      s.pendingRes[k](err);
+    }
+    s.pendingRes = {};
+  }
+};
+
+
+var websocketCloseStatus = {
+  1000: 'normal',
+  1001: 'going away',
+  1002: 'protocol error',
+  1003: 'unsupported',
+  // 1004 is currently unassigned
+  1005: 'no status',
+  1006: 'abnormal',
+  1007: 'inconsistent',
+  1008: 'invalid message',
+  1009: 'too large',
+};
+
+
+// Adopt a web socket, which should be in an OPEN state
+Sock.prototype.adoptWebSocket = function(ws) {
+  var s = this;
+  if (ws.readyState !== WebSocket.OPEN) {
+    throw new Error('web socket readyState != OPEN');
+  }
+  ws.binaryType = 'arraybuffer';
+  s.ws = ws;
+  ws.onclose = function(ev) {
+    var err = ws._gotalkCloseError;
+    if (!err && ev.code !== 1000) {
+      err = new Error('websocket closed: ' + (websocketCloseStatus[ev.code] || '#'+ev.code));
+    }
+    resetSock(s, err);
+    s.emit('close', err);
+  };
+  ws.onmessage = function(ev) {
+    if (!ws._bufferedMessages) ws._bufferedMessages = [];
+    ws._bufferedMessages.push(ev.data);
+  };
+};
+
+
+Sock.prototype.handshake = function () {
+  this.ws.send(this.protocol.versionBuf);
+};
+
+
+Sock.prototype.end = function() {
+  // Allow calling twice to "force close" even when there are pending responses
+  var s = this;
+  if (s.keepalive) {
+    s.keepalive.disable();
+    s.keepalive = null;
+  }
+  if (!s.pendingClose && s.hasPendingRes) {
+    s.pendingClose = true;
+  } else if (s.ws) {
+    s.ws.close(1000);
+  }
+};
+
+
+Sock.prototype.address = function() {
+  var s = this;
+  if (s.ws) {
+    return s.ws.url;
+  }
+  return null;
+};
+
+// ===============================================================================================
+// Reading messages from a connection
+
+var ErrAbnormal = exports.ErrAbnormal = Error("unsupported protocol");
+ErrAbnormal.isGotalkProtocolError = true;
+ErrAbnormal.code = protocol.ErrorAbnormal;
+
+var ErrUnsupported = exports.ErrUnsupported = Error("unsupported protocol");
+ErrUnsupported.isGotalkProtocolError = true;
+ErrUnsupported.code = protocol.ErrorUnsupported;
+
+var ErrInvalidMsg = exports.ErrInvalidMsg = Error("invalid protocol message");
+ErrInvalidMsg.isGotalkProtocolError = true;
+ErrInvalidMsg.code = protocol.ErrorInvalidMsg;
+
+var ErrTimeout = exports.ErrTimeout = Error("timeout");
+ErrTimeout.isGotalkProtocolError = true;
+ErrTimeout.code = protocol.ErrorTimeout;
+
+
+Sock.prototype.sendHeartbeat = function (load) {
+  var s = this, buf = s.protocol.makeHeartbeatMsg(Math.round(load * protocol.HeartbeatMsgMaxLoad));
+  try {
+    s.ws.send(buf);
+  } catch (err) {
+    if (!this.ws || this.ws.readyState > WebSocket.OPEN) {
+      err = new Error('socket is closed');
+    }
+    throw err;
+  }
+};
+
+
+Sock.prototype.startSendingHeartbeats = function() {
+  var s = this;
+  if (s.heartbeatInterval < 10) {
+    throw new Error("Sock.heartbeatInterval is too low");
+  }
+  clearTimeout(s._sendHeartbeatsTimer);
+  var send = function() {
+    clearTimeout(s._sendHeartbeatsTimer);
+    s.sendHeartbeat(0);
+    s._sendHeartbeatsTimer = setTimeout(send, s.heartbeatInterval);
+  };
+  s._sendHeartbeatsTimer = setTimeout(send, 1);
+};
+
+
+Sock.prototype.stopSendingHeartbeats = function() {
+  clearTimeout(s._sendHeartbeatsTimer);
+};
+
+
+Sock.prototype.startReading = function () {
+  var s = this, ws = s.ws, msg;  // msg = current message
+
+  function readMsg(ev) {
+    msg = typeof ev.data === 'string' ? txt.parseMsg(ev.data) : bin.parseMsg(Buf(ev.data));
+    // console.log(
+    //   'readMsg:',
+    //   typeof ev.data === 'string' ? ev.data : Buf(ev.data).toString(),
+    //   'msg:',
+    //   msg
+    // );
+    if (msg.t === protocol.MsgTypeProtocolError) {
+      var errcode = msg.size;
+      if (errcode === protocol.ErrorAbnormal) {
+        ws._gotalkCloseError = ErrAbnormal;
+      } else if (errcode === protocol.ErrorUnsupported) {
+        ws._gotalkCloseError = ErrUnsupported;
+      } else if (errcode === protocol.ErrorTimeout) {
+        ws._gotalkCloseError = ErrTimeout;
+      } else {
+        ws._gotalkCloseError = ErrInvalidMsg;
+      }
+      ws.close(4000 + errcode);
+    } else if (msg.size !== 0 && msg.t !== protocol.MsgTypeHeartbeat) {
+      ws.onmessage = readMsgPayload;
+    } else {
+      s.handleMsg(msg);
+      msg = null;
+    }
+  }
+
+  function readMsgPayload(ev) {
+    var b = ev.data;
+    ws.onmessage = readMsg;
+    s.handleMsg(msg, typeof b === 'string' ? b : Buf(b));
+    msg = null;
+  }
+
+  function readVersion(ev) {
+    var peerVersion = typeof ev.data === 'string' ? txt.parseVersion(ev.data) :
+                                                    bin.parseVersion(Buf(ev.data));
+    if (peerVersion !== protocol.Version) {
+      ws._gotalkCloseError = ErrUnsupported;
+      s.closeError(protocol.ErrorUnsupported);
+    } else {
+      ws.onmessage = readMsg;
+      if (s.heartbeatInterval > 0) {
+        s.startSendingHeartbeats();
+      }
+    }
+  }
+
+  // We begin by sending our version and reading the remote side's version
+  ws.onmessage = readVersion;
+
+  // Any buffered messages?
+  if (ws._bufferedMessages) {
+    ws._bufferedMessages.forEach(function(data){ ws.onmessage({data:data}); });
+    ws._bufferedMessages = null;
+  }
+};
+
+// ===============================================================================================
+// Handling of incoming messages
+
+var msgHandlers = {};
+
+Sock.prototype.handleMsg = function(msg, payload) {
+  // console.log('handleMsg:', String.fromCharCode(msg.t), msg, 'payload:', payload);
+  var msgHandler = msgHandlers[msg.t];
+  if (!msgHandler) {
+    if (s.ws) {
+      s.ws._gotalkCloseError = ErrInvalidMsg;
+    }
+    s.closeError(protocol.ErrorInvalidMsg);
+  } else {
+    msgHandler.call(this, msg, payload);
+  }
+};
+
+msgHandlers[protocol.MsgTypeSingleReq] = function (msg, payload) {
+  var s = this, handler, result;
+  handler = s.handlers.findRequestHandler(msg.name);
+
+  result = function (outbuf) {
+    s.sendMsg(protocol.MsgTypeSingleRes, msg.id, null, 0, outbuf);
+  };
+  result.error = function (err) {
+    var errstr = err.message || String(err);
+    s.sendMsg(protocol.MsgTypeErrorRes, msg.id, null, 0, errstr);
+  };
+
+  if (typeof handler !== 'function') {
+    result.error('no such operation "'+msg.name+'"');
+  } else {
+    try {
+      handler(payload, result, msg.name);
+    } catch (err) {
+      if (typeof console !== 'undefined') { console.error(err.stack || err); }
+      result.error('internal error');
+    }
+  }
+};
+
+function handleRes(msg, payload) {
+  var id = typeof msg.id === 'string' ? msg.id : msg.id.toString();
+  var s = this, callback = s.pendingRes[id];
+  if (msg.t !== protocol.MsgTypeStreamRes || !payload || (payload.length || payload.size) === 0) {
+    delete s.pendingRes[id];
+    if (s.pendingClose && !s.hasPendingRes) {
+      s.end();
+    }
+  }
+  if (typeof callback !== 'function') {
+    return; // ignore message
+  }
+  if (msg.t === protocol.MsgTypeErrorRes) {
+    callback(new Error(String(payload)), null);
+  } else {
+    callback(null, payload);
+  }
+}
+
+msgHandlers[protocol.MsgTypeSingleRes] = handleRes;
+msgHandlers[protocol.MsgTypeStreamRes] = handleRes;
+msgHandlers[protocol.MsgTypeErrorRes] = handleRes;
+
+msgHandlers[protocol.MsgTypeNotification] = function (msg, payload) {
+  var s = this, handler = s.handlers.findNotificationHandler(msg.name);
+  if (handler) {
+    handler(payload, msg.name);
+  }
+};
+
+msgHandlers[protocol.MsgTypeHeartbeat] = function (msg) {
+  this.emit('heartbeat', {time:new Date(msg.size * 1000), load:msg.wait});
+};
+
+// ===============================================================================================
+// Sending messages
+
+
+Sock.prototype.sendMsg = function(t, id, name, wait, payload) {
+  var payloadSize = (payload && typeof payload === 'string' && this.protocol === protocol.binary) ?
+    utf8.sizeOf(payload) :
+    payload ? payload.length || payload.size :
+    0;
+  var s = this, buf = s.protocol.makeMsg(t, id, name, wait, payloadSize);
+  // console.log('sendMsg(',t,id,name,payload,'): protocol.makeMsg =>',
+  //   typeof buf === 'string' ? buf : buf.toString());
+  try {
+    s.ws.send(buf);
+    if (payloadSize !== 0) {
+      s.ws.send(payload);
+    }
+  } catch (err) {
+    if (!this.ws || this.ws.readyState > WebSocket.OPEN) {
+      err = new Error('socket is closed');
+    }
+    throw err;
+  }
+};
+
+
+Sock.prototype.closeError = function(code) {
+  var s = this, buf;
+  if (s.ws) {
+    try {
+      s.ws.send(s.protocol.makeMsg(protocol.MsgTypeProtocolError, null, null, 0, code));
+    } catch (e) {}
+    s.ws.close(4000 + code);
+  }
+};
+
+var zeroes = '0000';
+
+// callback function(Error, outbuf)
+Sock.prototype.bufferRequest = function(op, buf, callback) {
+  var s = this, id = s.nextOpID++;
+  if (s.nextOpID === 1679616) {
+    // limit for base36 within 4 digits (36^4=1679616)
+    s.nextOpID = 0;
+  }
+  id = id.toString(36);
+  id = zeroes.substr(0, 4 - id.length) + id;
+
+  s.pendingRes[id] = callback;
+  try {
+    s.sendMsg(protocol.MsgTypeSingleReq, id, op, 0, buf);
+  } catch (err) {
+    delete s.pendingRes[id];
+    callback(err);
+  }
+}
+
+
+Sock.prototype.bufferNotify = function(name, buf) {
+  s.sendMsg(protocol.MsgTypeNotification, null, name, 0, buf);
+}
+
+
+Sock.prototype.request = function(op, value, callback) {
+  var buf;
+  if (!callback) {
+    // no value
+    callback = value;
+  } else {
+    buf = JSON.stringify(value);
+  }
+  return this.bufferRequest(op, buf, function (err, buf) {
+    var value = decodeJSON(buf);
+    return callback(err, value);
+  });
+};
+
+
+Sock.prototype.notify = function(op, value) {
+  var buf = JSON.stringify(value);
+  return this.bufferNotify(op, buf);
+};
+
+
+// ===============================================================================================
+
+// Represents a stream request.
+// Response(s) arrive by the "data"(buf) event. When the response is complete, a "end"(error)
+// event is emitted, where error is non-empty if the request failed.
+var StreamRequest = function(s, op, id) {
+  return Object.create(StreamRequest.prototype, {
+    s:          {value:s},
+    op:         {value:op, enumerable:true},
+    id:         {value:id, enumerable:true},
+    onresponse: {value:function(){}, enumerable:true, write:true}
+  });
+};
+
+EventEmitter.mixin(StreamRequest.prototype);
+
+StreamRequest.prototype.write = function (buf) {
+  if (!this.ended) {
+    if (!this.started) {
+      this.started = true;
+      this.s.sendMsg(protocol.MsgTypeStreamReq, this.id, this.op, 0, buf);
+    } else {
+      this.s.sendMsg(protocol.MsgTypeStreamReqPart, this.id, null, 0, buf);
+    }
+    if (!buf || buf.length === 0 || buf.size === 0) {
+      this.ended = true;
+    }
+  }
+};
+
+// Finalize the request
+StreamRequest.prototype.end = function () {
+  this.write(null);
+};
+
+Sock.prototype.streamRequest = function(op) {
+  var s = this, id = s.nextStreamID++;
+  if (s.nextStreamID === 46656) {
+    // limit for base36 within 3 digits (36^3=46656)
+    s.nextStreamID = 0;
+  }
+  id = id.toString(36);
+  id = '!' + zeroes.substr(0, 3 - id.length) + id;
+
+  var req = StreamRequest(s, op, id);
+
+  s.pendingRes[id] = function (err, buf) {
+    if (err) {
+      req.emit('end', err);
+    } else if (!buf || buf.length === 0) {
+      req.emit('end', null);
+    } else {
+      req.emit('data', buf);
+    }
+  };
+
+  return req;
+};
+
+
+// ===============================================================================================
+
+function Handlers() { return Object.create(Handlers.prototype, {
+  reqHandlers:         {value:{}},
+  reqFallbackHandler:  {value:null, writable:true},
+  noteHandlers:        {value:{}},
+  noteFallbackHandler: {value:null, writable:true}
+}); }
+exports.Handlers = Handlers;
+
+
+Handlers.prototype.handleBufferRequest = function(op, handler) {
+  if (!op) {
+    this.reqFallbackHandler = handler;
+  } else {
+    this.reqHandlers[op] = handler;
+  }
+};
+
+Handlers.prototype.handleRequest = function(op, handler) {
+  return this.handleBufferRequest(op, function (buf, result, op) {
+    var resultWrapper = function(value) {
+      return result(JSON.stringify(value));
+    };
+    resultWrapper.error = result.error;
+    var value = decodeJSON(buf);
+    handler(value, resultWrapper, op);
+  });
+};
+
+Handlers.prototype.handleBufferNotification = function(name, handler) {
+  if (!name) {
+    this.noteFallbackHandler = handler;
+  } else {
+    this.noteHandlers[name] = handler;
+  }
+};
+
+Handlers.prototype.handleNotification = function(name, handler) {
+  this.handleBufferNotification(name, function (buf, name) {
+    handler(decodeJSON(buf), name);
+  });
+};
+
+Handlers.prototype.findRequestHandler = function(op) {
+  var handler = this.reqHandlers[op];
+  return handler || this.reqFallbackHandler;
+};
+
+Handlers.prototype.findNotificationHandler = function(name) {
+  var handler = this.noteHandlers[name];
+  return handler || this.noteFallbackHandler;
+};
+
+// ===============================================================================================
+
+function openWebSocket(s, addr, callback) {
+  var ws;
+  try {
+    ws = new WebSocket(addr);
+    ws.binaryType = 'arraybuffer';
+    ws.onclose = function (ev) {
+      var err = new Error('connection failed');
+      if (callback) callback(err);
+    };
+    ws.onopen = function(ev) {
+      ws.onerror = undefined;
+      s.adoptWebSocket(ws);
+      s.handshake();
+      if (callback) callback(null, s);
+      s.emit('open');
+      s.startReading();
+    };
+    ws.onmessage = function(ev) {
+      if (!ws._bufferedMessages) ws._bufferedMessages = [];
+      ws._bufferedMessages.push(ev.data);
+    };
+  } catch (err) {
+    if (callback) callback(err);
+    s.emit('close', err);
+  }
+}
+
+
+// gotalk.defaultResponderAddress is defined if the responder has announced a default address
+// to which connect to.
+if (window.gotalkResponderAt !== undefined) {
+  var at = window.gotalkResponderAt;
+  delete window.gotalkResponderAt;
+  if (at && at.ws) {
+    gotalk.defaultResponderAddress = 'ws://' + document.location.host + at.ws;
+  }
+}
+
+
+Sock.prototype.open = function(addr, callback) {
+  var s = this;
+  if (!callback && typeof addr == 'function') {
+    callback = addr;
+    addr = null;
+  }
+
+  if (!addr) {
+    if (!gotalk.defaultResponderAddress) {
+      throw new Error('address not specified (responder has not announced any default address)')
+    }
+    addr = gotalk.defaultResponderAddress;
+  }
+
+  if (addr.substr(0,3) === 'ws:') {
+    openWebSocket(s, addr, callback);
+  } else {
+    throw new Error('unsupported address');
+  }
+  return s;
+};
+
+
+// Open a connection to a gotalk responder.
+// 
+// open(addr string[, onConnect(Error, Sock)]) -> Sock
+//   Connect to gotalk responder at "addr"
+//
+// open([onConnect(Error, Sock)]) -> Sock
+//   Connect to default gotalk responder.
+//   Throws an error if "gotalk.defaultResponderAddress" isn't defined.
+//
+gotalk.open = function(addr, onConnect) {
+  var s = Sock(gotalk.defaultHandlers);
+  s.open(addr, onConnect);
+  return s;
+};
+
+
+// If "addr" is not provided, "gotalk.defaultResponderAddress" is used instead.
+Sock.prototype.openKeepAlive = function(addr) {
+  var s = this;
+  if (s.keepalive) {
+    s.keepalive.disable();
+  }
+  s.keepalive = keepalive(s, addr);
+  s.keepalive.enable();
+  return s;
+};
+
+
+// Returns a new Sock with a persistent connection to a gotalk responder.
+// The Connection is automatically kept alive (by reconnecting) until Sock.end() is called.
+// If "addr" is not provided, "gotalk.defaultResponderAddress" is used instead.
+gotalk.connection = function(addr) {
+  var s = Sock(gotalk.defaultHandlers);
+  s.openKeepAlive(addr);
+  return s;
+};
+
+
+gotalk.defaultHandlers = Handlers();
+
+gotalk.handleBufferRequest = function(op, handler) {
+  return gotalk.defaultHandlers.handleBufferRequest(op, handler);
+};
+
+gotalk.handle = function(op, handler) {
+  return gotalk.defaultHandlers.handleRequest(op, handler);
+};
+
+gotalk.handleBufferNotification = function (name, handler) {
+  return gotalk.defaultHandlers.handleBufferNotification(name, handler);
+};
+
+gotalk.handleNotification = function (name, handler) {
+  return gotalk.defaultHandlers.handleNotification(name, handler);
+};
+
+// -----------------------------------------------------------------------------------------------
+
+
+
+};
+
+
+__mainapi = {exports:{}};
+__main(__mainapi);
+
+global.gotalk = __mainapi.exports;
+})(typeof window !== "undefined" ? window : this);
+`
