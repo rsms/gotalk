@@ -9,23 +9,24 @@ import (
   "time"
 )
 
-const (
-  // Version of this protocol
-  ProtocolVersion      = uint8(1)
+// Version of this protocol
+const ProtocolVersion = uint8(1)
 
-  // Protocol message types
-  MsgTypeSingleReq     = MsgType(byte('r'))
-  MsgTypeStreamReq     = MsgType(byte('s'))
-  MsgTypeStreamReqPart = MsgType(byte('p'))
-  MsgTypeSingleRes     = MsgType(byte('R'))
-  MsgTypeStreamRes     = MsgType(byte('S'))
-  MsgTypeErrorRes      = MsgType(byte('E'))
-  MsgTypeRetryRes      = MsgType(byte('e'))
-  MsgTypeNotification  = MsgType(byte('n'))
-  MsgTypeHeartbeat     = MsgType(byte('h'))
-  MsgTypeProtocolError = MsgType(byte('f'))
+// Protocol message types
+const (
+  MsgTypeSingleReq     = MsgType('r')
+  MsgTypeStreamReq     = MsgType('s')
+  MsgTypeStreamReqPart = MsgType('p')
+  MsgTypeSingleRes     = MsgType('R')
+  MsgTypeStreamRes     = MsgType('S')
+  MsgTypeErrorRes      = MsgType('E')
+  MsgTypeRetryRes      = MsgType('e')
+  MsgTypeNotification  = MsgType('n')
+  MsgTypeHeartbeat     = MsgType('h')
+  MsgTypeProtocolError = MsgType('f')
 )
 
+// ProtocolError codes
 const (
   ProtocolErrorAbnormal    = 0
   ProtocolErrorUnsupported = 1

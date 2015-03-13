@@ -11,9 +11,8 @@ import (
   "runtime"
 )
 
-var (
-  ErrUnexpectedStreamingRes = errors.New("unexpected streaming response")
-)
+// Returned by (Sock)BufferRequest when a streaming response is recieved
+var ErrUnexpectedStreamingRes = errors.New("unexpected streaming response")
 
 type pendingResMap  map[string]chan Response
 type pendingReqMap  map[string]chan []byte
