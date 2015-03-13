@@ -10,7 +10,7 @@ gotalk.handle('prompt', function (params, result) {
   result(answer);
 });
 
-gotalk.connection('ws://'+document.location.host+'/gotalk').on('open', function (err, s) {
+gotalk.connection().on('open', function (err, s) {
   if (err) return console.error(err);
   s.request('echo', function(err, result) {
     alert('echo returned:', result);
