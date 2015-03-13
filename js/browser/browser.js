@@ -32,4 +32,4 @@ __mainapi = {exports:{}};
 __main(__mainapi);
 
 global.gotalk = __mainapi.exports;
-})(typeof window !== "undefined" ? window : this);
+})(this);

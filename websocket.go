@@ -26,42 +26,45 @@ type WebSocketServer struct {
 }
 
 const gotalkJSSuffix = "/gotalk.js"
+const gotalkJSMapSuffix = "/gotalk.js.map"
+
+func (s *WebSocketServer) serveResource(w http.ResponseWriter, r *http.Request, f func()) {
+  // serve javascript library
+  w.Header()["Cache-Control"] = []string{"public, max-age=300"}
+  etag := "\"" + gotalkjs.BrowserLibSHA1Base64 + r.URL.Path + "\""
+  w.Header()["ETag"] = []string{etag}
+  reqETag := r.Header["If-None-Match"]
+
+  if len(reqETag) != 0 && reqETag[0] == etag {
+    w.WriteHeader(http.StatusNotModified)
+  } else {
+    f()
+  }
+}
 
 func (s *WebSocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   if strings.HasSuffix(r.URL.Path, gotalkJSSuffix) {
-    // serve javascript library
-    reqETag := r.Header["If-None-Match"]
-    w.Header()["Cache-Control"] = []string{"public, max-age=300"}
-
-    // Version of this code that trades some memory and cpu for including `gotalkResponderAt`
-    etag := "\"" + gotalkjs.BrowserLibSHA1Base64 + r.URL.Path + "\""
-    w.Header()["ETag"] = []string{etag}
-    if len(reqETag) != 0 && reqETag[0] == etag {
-      w.WriteHeader(http.StatusNotModified)
-    } else {
+    s.serveResource(w, r, func () {
       w.Header()["Content-Type"] = []string{"text/javascript"}
       wsPath := r.URL.Path[:len(r.URL.Path)-len(gotalkJSSuffix)+1]
-      serveURL := "window.gotalkResponderAt={ws:'"+wsPath+"'};"
+      serveURL := "this.gotalkResponderAt={ws:'"+wsPath+"'};"
       sizeStr := strconv.FormatInt(int64(len(serveURL) + len(gotalkjs.BrowserLibString)), 10)
       w.Header()["Content-Length"] = []string{sizeStr}
       w.WriteHeader(http.StatusOK)
       // Note: w conforms to interface { WriteString(string)(int,error) }
       io.WriteString(w, serveURL)
       io.WriteString(w, gotalkjs.BrowserLibString)
-    }
-
-    // Version of this code that trade `gotalkResponderAt` for some memory and cpu
-    // w.Header()["ETag"] = []string{gotalkjs.BrowserLibETag}
-    // if len(reqETag) != 0 && reqETag[0] == gotalkjs.BrowserLibETag {
-    //   w.WriteHeader(http.StatusNotModified)
-    // } else {
-    //   w.Header()["Content-Type"] = []string{"text/javascript"}
-    //   w.Header()["Content-Length"] = []string{gotalkjs.BrowserLibSizeString}
-    //   w.WriteHeader(http.StatusOK)
-    //   // Note: w conforms to interface { WriteString(string)(int,error) }
-    //   io.WriteString(w, gotalkjs.BrowserLibString)
-    // }
-
+    })
+  } else if strings.HasSuffix(r.URL.Path, gotalkJSMapSuffix) {
+    s.serveResource(w, r, func () {
+      w.Header()["Content-Type"] = []string{"application/json"}
+      w.Header()["Content-Length"] = []string{strconv.FormatInt(
+        int64(len(gotalkjs.BrowserLibSourceMapString)),
+        10,
+      )}
+      w.WriteHeader(http.StatusOK)
+      io.WriteString(w, gotalkjs.BrowserLibSourceMapString)
+    })
   } else {
     // upgrade request connection to web socket protocol
     s.Server.ServeHTTP(w, r)

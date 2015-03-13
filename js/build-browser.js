@@ -1,6 +1,7 @@
 "use strict";
 var fs = require('fs');
 var crypto = require('crypto');
+var subprocess = require('child_process');
 
 var srcDir = __dirname + '/gotalk';
 var browserFile = __dirname + '/browser/browser.js';
@@ -51,9 +52,38 @@ function buildAll() {
     return vars[name] || '';
   });
 
-  fs.writeFileSync(__dirname + '/gotalk.js', source);
+  var tmpsrcfile = __dirname + '/.gotalk-debug.js';
+  fs.writeFileSync(tmpsrcfile, source);
 
-  var srcbuf = new Buffer(source, 'utf8');
+  console.log('write js/gotalk.js, js/gotalk.js.map');
+  var p = subprocess.spawnSync("uglifyjs", [
+    '.gotalk-debug.js',
+    '--output', 'gotalk.js',
+    '--mangle',
+    // '--define', 'window',
+    // '--reserved', 'window',
+    '--lint',
+    '--compress',
+    '--source-map', __dirname + '/gotalk.js.map',
+    // '--source-map-root', './',
+    '--source-map-url', 'gotalk.js.map',
+    '--source-map-include-sources',
+    '--screw-ie8',
+  ], {
+    cwd: __dirname
+  });
+  if (p.error) {
+    throw p.error;
+  }
+
+  buildGoFile();
+}
+
+
+function buildGoFile() {
+  // var srcbuf = new Buffer(source, 'utf8');
+  var srcbuf = fs.readFileSync(__dirname + '/gotalk.js');
+  var srcmapbuf = fs.readFileSync(__dirname + '/gotalk.js.map');
   // console.log(srcbuf.toString('hex'))
 
   var srcsha1 = crypto.createHash('sha1');
@@ -66,7 +96,8 @@ function buildAll() {
     // 'const BrowserLibSHA1Raw    = '+bufToByteStr(sha1buf, '"')+'\n'+
     'const BrowserLibSHA1Base64 = "'+sha1buf.toString('base64')+'"\n'+
     'const BrowserLibETag = "\\\"'+sha1buf.toString('base64')+'\\\""\n'+
-    'const BrowserLibString = '+bufToByteStr(srcbuf, '"', true)+'\n'+
+    'const BrowserLibString = '+bufToByteStr(srcbuf, '"')+'\n'+
+    'const BrowserLibSourceMapString = '+bufToByteStr(srcmapbuf, '"')+'\n'+
     //'var BrowserLibBytes        = [...]byte{\n  '
     '';
   // var hex2v = srcbuf.toString('hex');
@@ -89,9 +120,8 @@ function buildAll() {
   //   }
   // }
   // goSource += '\n}\n';
+  console.log('write js/gotalk.js.go');
   fs.writeFileSync(__dirname + '/gotalk.js.go', goSource);
-
-  console.log('Built js/gotalk.js ('+source.length+' bytes) and wrote js/gotalk.js.go');
 }
 
 
@@ -129,6 +159,21 @@ function bufToByteStr(buf, enclosedByChar, breakUpLines) {
   }
   return s + enclosedByChar;
 }
+
+// function bufToMultilineByteStr(buf) {
+//   var s = '`', b = '`'.charCodeAt(0);
+//   for (var c, i = 0, L = buf.length; i !== L; ++i) {
+//     c = buf[i];
+//     if (c === 0x0a) {
+//       s += '\n';
+//     } else if (c === b) {
+//       throw new Error('backtick inside multiline string is not supported by Go')
+//     } else {
+//       s += strEscByte(c);
+//     }
+//   }
+//   return s + '`';
+// }
 
 
 buildAll();
