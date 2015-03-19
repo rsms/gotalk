@@ -225,7 +225,7 @@ Here's a complete description of the protocol:
     ProtocolVersion = <hexdigit> <hexdigit>
 
     SingleRequest   = "r" requestID operation payload
-    StreamRequest   = "s" requestID operation payload StreamReqPart+
+    StreamRequest   = "s" requestID operation payload StreamReqPart*
     StreamReqPart   = "p" requestID payload
     SingleResult    = "R" requestID payload
     StreamResult    = "S" requestID payload StreamResult*
