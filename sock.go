@@ -1,6 +1,5 @@
 package gotalk
 import (
-  "encoding/json"
   "errors"
   "io"
   "log"
@@ -60,11 +59,13 @@ type Sock struct {
   // Used for handling streaming requests:
   pendingReq     pendingReqMap
   pendingReqMu   sync.RWMutex
+
+  encoding       Encoding
 }
 
 
 func NewSock(h *Handlers) *Sock {
-  return &Sock{Handlers:h, closeCode:-1, HeartbeatInterval:20 * time.Second}
+  return &Sock{Handlers:h, closeCode:-1, HeartbeatInterval:20 * time.Second, encoding: h.encoding}
 }
 
 
@@ -92,8 +93,15 @@ func Pipe(handlers *Handlers, limits Limits) (*Sock, *Sock, error) {
 // Connect to a server via `how` at `addr`. Unless there's an error, the returned socket is
 // already reading in a different goroutine and is ready to be used.
 func Connect(how, addr string) (*Sock, error) {
-  s := NewSock(DefaultHandlers)
-  return s, s.Connect(how, addr, DefaultLimits)
+  return ConnectWithOptions(how, addr, &SocketOptions{
+    Handlers: DefaultHandlers,
+    Limits: DefaultLimits,
+  })
+}
+
+func ConnectWithOptions(how, addr string, options *SocketOptions) (*Sock, error) {
+  s := NewSock(options.Handlers)
+  return s, s.Connect(how, addr, options.Limits)
 }
 
 
@@ -273,7 +281,7 @@ func (s *Sock) BufferRequest(op string, buf []byte) ([]byte, error) {
 
 // Send a single-value request where the input and output values are JSON-encoded
 func (s *Sock) Request(op string, in interface{}, out interface{}) error {
-  inbuf, err := json.Marshal(in)
+  inbuf, err := s.encoding.Encode(in)
   if err != nil {
     return err
   }
@@ -281,7 +289,7 @@ func (s *Sock) Request(op string, in interface{}, out interface{}) error {
   if err != nil {
     return err
   }
-  return json.Unmarshal(outbuf, out)
+  return s.encoding.Decode(outbuf, out)
 }
 
 
@@ -300,7 +308,7 @@ func (s *Sock) BufferNotify(name string, buf []byte) error {
 
 // Send a single-value request where the value is JSON-encoded
 func (s *Sock) Notify(name string, v interface{}) error {
-  if buf, err := json.Marshal(v); err != nil {
+  if buf, err := s.encoding.Encode(v); err != nil {
     return err
   } else {
     return s.BufferNotify(name, buf)

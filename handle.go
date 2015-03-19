@@ -19,13 +19,17 @@ type Handlers struct {
   notesMu                   sync.RWMutex
   noteHandlers              noteHandlerMap
   noteFallbackHandler       BufferNoteHandler
+
+  encoding                  Encoding
 }
 
 func NewHandlers() *Handlers {
   return &Handlers{
     bufReqHandlers:    make(bufReqHandlerMap),
     streamReqHandlers: make(streamReqHandlerMap),
-    noteHandlers:      make(noteHandlerMap)}
+    noteHandlers:      make(noteHandlerMap),
+    encoding:          &JSONEncoding{},
+  }
 }
 
 // If a handler panics, it's assumed that the effect of the panic was isolated to the active
@@ -99,7 +103,7 @@ type noteHandlerMap      map[string]BufferNoteHandler
 
 // See Handle()
 func (h *Handlers) Handle(op string, fn interface{}) {
-  h.HandleBufferRequest(op, wrapFuncReqHandler(fn))
+  h.HandleBufferRequest(op, wrapFuncReqHandler(h.encoding, fn))
 }
 
 // See HandleBufferRequest()
@@ -126,7 +130,7 @@ func (h *Handlers) HandleStreamRequest(op string, fn StreamReqHandler) {
 
 // See HandleNotification()
 func (h *Handlers) HandleNotification(name string, fn interface{}) {
-  h.HandleBufferNotification(name, wrapFuncNotHandler(fn))
+  h.HandleBufferNotification(name, wrapFuncNotHandler(h.encoding, fn))
 }
 
 // See HandleBufferNotification()
@@ -191,11 +195,28 @@ func valToErr(r reflect.Value) error {
   return errors.New("error")  // fixme
 }
 
+// Encoding to use for Handlers.
+type Encoding interface {
+  Encode(v interface{}) ([]byte, error)
+  Decode(data []byte, v interface{}) error
+}
 
-func decodeResult(r []reflect.Value) ([]byte, error) {
+type JSONEncoding struct {}
+
+func (j *JSONEncoding) Encode(v interface{}) ([]byte, error) {
+  return json.Marshal(v)
+}
+
+func (j *JSONEncoding) Decode(data []byte, v interface{}) error {
+  return json.Unmarshal(data, v)
+}
+
+
+
+func decodeResult(encoding Encoding, r []reflect.Value) ([]byte, error) {
   if len(r) == 2 {
     if r[1].IsNil() {
-      return json.Marshal(r[0].Interface())
+      return encoding.Encode(r[0].Interface())
     } else {
       return nil, valToErr(r[1])
     }
@@ -207,10 +228,10 @@ func decodeResult(r []reflect.Value) ([]byte, error) {
 }
 
 
-func decodeParams(paramsType reflect.Type, inbuf []byte) (*reflect.Value, error) {
+func decodeParams(encoding Encoding, paramsType reflect.Type, inbuf []byte) (*reflect.Value, error) {
   paramsVal := reflect.New(paramsType)
   params := paramsVal.Interface()
-  if err := json.Unmarshal(inbuf, &params); err != nil {
+  if err := encoding.Decode(inbuf, params); err != nil {
     return &paramsVal, errUnexpectedParamType
   }
   return &paramsVal, nil
@@ -231,7 +252,7 @@ func typeIsSockPtr(t reflect.Type) (ok bool, sockPtrToValue sockPtrToValueFunc) 
 }
 
 
-func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
+func wrapFuncReqHandler(encoding Encoding, fn interface{}) BufferReqHandler {
   // `fn` must conform to one of the following signatures:
   //   `func(*Sock, interface{})(interface{}, error)` -- takes socket and parameters
   //   `func(interface{})(interface{}, error)`        -- takes parameters, but no socket
@@ -266,12 +287,12 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
     paramsType := fnt.In(2)
 
     return BufferReqHandler(func (s *Sock, op string, inbuf []byte) ([]byte, error) {
-      paramsVal, err := decodeParams(paramsType, inbuf)
+      paramsVal, err := decodeParams(encoding, paramsType, inbuf)
       if err != nil {
         return nil, err
       }
       r := fnv.Call([]reflect.Value{sockPtrToValue(s), reflect.ValueOf(op), paramsVal.Elem()})
-      return decodeResult(r)
+      return decodeResult(encoding, r)
     })
 
   } else if fnt.NumIn() == 2 {
@@ -279,12 +300,12 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
     paramsType := fnt.In(1)
 
     return BufferReqHandler(func (s *Sock, _ string, inbuf []byte) ([]byte, error) {
-      paramsVal, err := decodeParams(paramsType, inbuf)
+      paramsVal, err := decodeParams(encoding, paramsType, inbuf)
       if err != nil {
         return nil, err
       }
       r := fnv.Call([]reflect.Value{sockPtrToValue(s), paramsVal.Elem()})
-      return decodeResult(r)
+      return decodeResult(encoding, r)
     })
 
   } else if fnt.NumIn() == 1 {
@@ -292,18 +313,18 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
       // Signature: `func(*Sock)(interface{}, error)`
       return BufferReqHandler(func (s *Sock, _ string, _ []byte) ([]byte, error) {
         r := fnv.Call([]reflect.Value{sockPtrToValue(s)})
-        return decodeResult(r)
+        return decodeResult(encoding, r)
       })
     } else {
       // Signature: `func(interface{})(interface{}, error)`
       paramsType := fnt.In(0)
       return BufferReqHandler(func (_ *Sock, _ string, inbuf []byte) ([]byte, error) {
-        paramsVal, err := decodeParams(paramsType, inbuf)
+        paramsVal, err := decodeParams(encoding, paramsType, inbuf)
         if err != nil {
           return nil, err
         }
         r := fnv.Call([]reflect.Value{paramsVal.Elem()})
-        return decodeResult(r)
+        return decodeResult(encoding, r)
       })
     }
 
@@ -312,7 +333,7 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
       // Signature: `func()(interface{},error)`
       return BufferReqHandler(func (_ *Sock, _ string, _ []byte) ([]byte, error) {
         r := fnv.Call(nil)
-        return decodeResult(r)
+        return decodeResult(encoding, r)
       })
     } else {
       // Signature: `func()error`
@@ -329,7 +350,7 @@ func wrapFuncReqHandler(fn interface{}) BufferReqHandler {
 }
 
 
-func wrapFuncNotHandler(fn interface{}) BufferNoteHandler {
+func wrapFuncNotHandler(encoding Encoding, fn interface{}) BufferNoteHandler {
   // `fn` must conform to one of the following signatures:
   //   `func(*Sock, string, interface{})` -- takes socket, name and parameters
   //   `func(string, interface{})`        -- takes name and parameters, but no socket
@@ -354,7 +375,7 @@ func wrapFuncNotHandler(fn interface{}) BufferNoteHandler {
     paramsType := fnt.In(2)
     return BufferNoteHandler(
       func (s *Sock, name string, inbuf []byte) {
-        paramsVal, _ := decodeParams(paramsType, inbuf)
+        paramsVal, _ := decodeParams(encoding, paramsType, inbuf)
         fnv.Call([]reflect.Value{sockPtrToValue(s), reflect.ValueOf(name), paramsVal.Elem()})
       })
   } else if fnt.NumIn() == 2 {
@@ -365,7 +386,7 @@ func wrapFuncNotHandler(fn interface{}) BufferNoteHandler {
     paramsType := fnt.In(1)
     return BufferNoteHandler(
       func (_ *Sock, name string, inbuf []byte) {
-        paramsVal, _ := decodeParams(paramsType, inbuf)
+        paramsVal, _ := decodeParams(encoding, paramsType, inbuf)
         fnv.Call([]reflect.Value{reflect.ValueOf(name), paramsVal.Elem()})
       })
   } else {
@@ -373,7 +394,7 @@ func wrapFuncNotHandler(fn interface{}) BufferNoteHandler {
     paramsType := fnt.In(0)
     return BufferNoteHandler(
       func (_ *Sock, _ string, inbuf []byte) {
-        paramsVal, _ := decodeParams(paramsType, inbuf)
+        paramsVal, _ := decodeParams(encoding, paramsType, inbuf)
         fnv.Call([]reflect.Value{paramsVal.Elem()})
       })
   }

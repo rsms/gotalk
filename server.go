@@ -56,11 +56,25 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 }
 
 
+type SocketOptions struct {
+  Handlers *Handlers
+  Limits   Limits
+}
+
+
+// See ListenWithOptions().
+// The returned server has Handlers=DefaultHandlers and Limits=DefaultLimits set.
+func Listen(how, addr string) (*Server, error) {
+  return ListenWithOptions(how, addr, &SocketOptions{
+    Handlers: DefaultHandlers,
+    Limits: DefaultLimits,
+  })
+}
+
 // Start a `how` server listening for connections at `addr`. You need to call Accept() on the
 // returned socket to start accepting connections. `how` and `addr` are passed to `net.Listen()`
 // and thus any values accepted by net.Listen are valid.
-// The returned server has Handlers=DefaultHandlers and Limits=DefaultLimits set.
-func Listen(how, addr string) (*Server, error) {
+func ListenWithOptions(how, addr string, options *SocketOptions) (*Server, error) {
   l, err := net.Listen(how, addr)
   if err != nil {
     return nil, err
@@ -71,7 +85,7 @@ func Listen(how, addr string) (*Server, error) {
     l = &tcpKeepAliveListener{tcpl}
   }
 
-  s := NewServer(DefaultHandlers, DefaultLimits, l)
+  s := NewServer(options.Handlers, options.Limits, l)
 
   if how == "unix" || how == "unixpacket" {
     // Unix sockets must be unlink()ed before being reused again.
