@@ -248,7 +248,7 @@ Here's a complete description of the protocol:
     text3Size       = hexUInt3
     text3Value      = <<byte>{text3Size} as utf8 text>
 
-    payload         = payloadSize payloadData?
+    payload         = payloadSize payloadData
     payloadSize     = hexUInt8
     payloadData     = <byte>{payloadSize}
 
