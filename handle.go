@@ -24,11 +24,15 @@ type Handlers struct {
 }
 
 func NewHandlers() *Handlers {
+  return NewHandlersWithEncoding(&JSONEncoding{})
+}
+
+func NewHandlersWithEncoding(encoding Encoding) *Handlers {
   return &Handlers{
     bufReqHandlers:    make(bufReqHandlerMap),
     streamReqHandlers: make(streamReqHandlerMap),
     noteHandlers:      make(noteHandlerMap),
-    encoding:          &JSONEncoding{},
+    encoding:          encoding,
   }
 }
 
