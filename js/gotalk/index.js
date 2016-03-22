@@ -189,6 +189,7 @@ Sock.prototype.startSendingHeartbeats = function() {
 
 
 Sock.prototype.stopSendingHeartbeats = function() {
+  var s = this;
   clearTimeout(s._sendHeartbeatsTimer);
 };
 
@@ -390,6 +391,7 @@ Sock.prototype.bufferRequest = function(op, buf, callback) {
 
 
 Sock.prototype.bufferNotify = function(name, buf) {
+  var s = this;
   s.sendMsg(protocol.MsgTypeNotification, null, name, 0, buf);
 }
 
@@ -595,7 +597,7 @@ Sock.prototype.open = function(addr, callback) {
 
 
 // Open a connection to a gotalk responder.
-// 
+//
 // open(addr string[, onConnect(Error, Sock)]) -> Sock
 //   Connect to gotalk responder at `addr`
 //
