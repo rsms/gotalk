@@ -189,6 +189,7 @@ Sock.prototype.startSendingHeartbeats = function() {
 
 
 Sock.prototype.stopSendingHeartbeats = function() {
+  var s = this;
   clearTimeout(s._sendHeartbeatsTimer);
 };
 
