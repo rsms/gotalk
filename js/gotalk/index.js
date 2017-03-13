@@ -566,7 +566,9 @@ function openWebSocket(s, addr, callback) {
 if (global.gotalkResponderAt !== undefined) {
   var at = global.gotalkResponderAt;
   if (at && at.ws) {
-    gotalk.defaultResponderAddress = 'ws://' + document.location.host + at.ws;
+    gotalk.defaultResponderAddress =
+      (document.location.protocol == 'https:' ? 'wss://' : 'ws://') +
+      document.location.host + at.ws;
   }
   delete global.gotalkResponderAt;
 }
@@ -586,11 +588,7 @@ Sock.prototype.open = function(addr, callback) {
     addr = gotalk.defaultResponderAddress;
   }
 
-  if (addr.substr(0,3) === 'ws:') {
-    openWebSocket(s, addr, callback);
-  } else {
-    throw new Error('unsupported address');
-  }
+  openWebSocket(s, addr, callback);
   return s;
 };
 
