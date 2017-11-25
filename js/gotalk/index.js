@@ -43,7 +43,7 @@ Sock.prototype = EventEmitter.mixin(Sock.prototype);
 exports.Sock = Sock;
 
 
-var resetSock = function(s, causedByErr) {
+function resetSock(s, causedByErr) {
   s.pendingClose = false;
   s.stopSendingHeartbeats();
 
@@ -63,7 +63,7 @@ var resetSock = function(s, causedByErr) {
     }
     s.pendingRes = {};
   }
-};
+}
 
 
 var websocketCloseStatus = {
@@ -263,6 +263,7 @@ var msgHandlers = {};
 
 Sock.prototype.handleMsg = function(msg, payload) {
   // console.log('handleMsg:', String.fromCharCode(msg.t), msg, 'payload:', payload);
+  var s = this;
   var msgHandler = msgHandlers[msg.t];
   if (!msgHandler) {
     if (s.ws) {
@@ -270,7 +271,7 @@ Sock.prototype.handleMsg = function(msg, payload) {
     }
     s.closeError(protocol.ErrorInvalidMsg);
   } else {
-    msgHandler.call(this, msg, payload);
+    msgHandler.call(s, msg, payload);
   }
 };
 
@@ -322,7 +323,7 @@ msgHandlers[protocol.MsgTypeStreamRes] = handleRes;
 msgHandlers[protocol.MsgTypeErrorRes] = handleRes;
 
 msgHandlers[protocol.MsgTypeNotification] = function (msg, payload) {
-  var s = this, handler = s.handlers.findNotificationHandler(msg.name);
+  var handler = this.handlers.findNotificationHandler(msg.name);
   if (handler) {
     handler(payload, msg.name);
   }
@@ -391,7 +392,7 @@ Sock.prototype.bufferRequest = function(op, buf, callback) {
 
 
 Sock.prototype.bufferNotify = function(name, buf) {
-  s.sendMsg(protocol.MsgTypeNotification, null, name, 0, buf);
+  this.sendMsg(protocol.MsgTypeNotification, null, name, 0, buf);
 }
 
 
