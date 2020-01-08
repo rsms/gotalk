@@ -1,4 +1,4 @@
-import { EventEmitter } from "./event"
+type int = number
 
 // connection() creates a persistent (keep-alive) connection to a gotalk responder.
 // If `addr` is not provided, `defaultResponderAddress` is used.
@@ -208,4 +208,15 @@ declare namespace protocol {
 
   // Implements a JavaScript text version of the gotalk protocol
   const text :Protocol<string>
+}
+
+type EventHandler<T=any> = (data :T)=>void
+
+interface EventEmitter<EventMap = {[k:string]:any}> {
+  addListener<K extends keyof EventMap>(e :K, handler :EventHandler<EventMap[K]>) :this
+  on<K extends keyof EventMap>(e :K, handler :EventHandler<EventMap[K]>) :this
+  removeListener<K extends keyof EventMap>(e :K, handler :EventHandler<EventMap[K]>) :void
+  removeListeners<K extends keyof EventMap>(e :K) :void
+  removeAllListeners() :void
+  triggerEvent<K extends keyof EventMap>(e :K, data? :EventMap[K]) :void
 }
