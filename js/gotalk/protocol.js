@@ -6,16 +6,17 @@ var utf8 = require('./utf8');
 exports.Version = 1;
 
 // Message types
-var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     'r'.charCodeAt(0),
-    MsgTypeStreamReq     = exports.MsgTypeStreamReq =     's'.charCodeAt(0),
-    MsgTypeStreamReqPart = exports.MsgTypeStreamReqPart = 'p'.charCodeAt(0),
-    MsgTypeSingleRes     = exports.MsgTypeSingleRes =     'R'.charCodeAt(0),
-    MsgTypeStreamRes     = exports.MsgTypeStreamRes =     'S'.charCodeAt(0),
-    MsgTypeErrorRes      = exports.MsgTypeErrorRes =      'E'.charCodeAt(0),
-    MsgTypeRetryRes      = exports.MsgTypeRetryRes =      'e'.charCodeAt(0),
-    MsgTypeNotification  = exports.MsgTypeNotification =  'n'.charCodeAt(0),
-    MsgTypeHeartbeat     = exports.MsgTypeHeartbeat =     'h'.charCodeAt(0),
-    MsgTypeProtocolError = exports.MsgTypeProtocolError = 'f'.charCodeAt(0);
+var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     0x72 // 'r'.charCodeAt(0)
+  , MsgTypeStreamReq     = exports.MsgTypeStreamReq =     0x73 // 's'.charCodeAt(0)
+  , MsgTypeStreamReqPart = exports.MsgTypeStreamReqPart = 0x70 // 'p'.charCodeAt(0)
+  , MsgTypeSingleRes     = exports.MsgTypeSingleRes =     0x52 // 'R'.charCodeAt(0)
+  , MsgTypeStreamRes     = exports.MsgTypeStreamRes =     0x53 // 'S'.charCodeAt(0)
+  , MsgTypeErrorRes      = exports.MsgTypeErrorRes =      0x45 // 'E'.charCodeAt(0)
+  , MsgTypeRetryRes      = exports.MsgTypeRetryRes =      0x65 // 'e'.charCodeAt(0)
+  , MsgTypeNotification  = exports.MsgTypeNotification =  0x6E // 'n'.charCodeAt(0)
+  , MsgTypeHeartbeat     = exports.MsgTypeHeartbeat =     0x68 // 'h'.charCodeAt(0)
+  , MsgTypeProtocolError = exports.MsgTypeProtocolError = 0x66 // 'f'.charCodeAt(0)
+;
 
 // ProtocolError codes
 exports.ErrorAbnormal    = 0
@@ -63,24 +64,24 @@ exports.binary = {
     z = 1;
 
     if (t === MsgTypeHeartbeat) {
-      wait = parseInt(b.slice(z, z + 4), 16);
+      wait = parseInt(b.subarray(z, z + 4), 16);
       z += 4;
     } else if (t !== MsgTypeNotification && t !== MsgTypeProtocolError) {
-      id = b.slice(z, z + 4);
+      id = b.subarray(z, z + 4);
       z += 4;
     }
 
     if (t == MsgTypeSingleReq || t == MsgTypeStreamReq || t == MsgTypeNotification) {
-      namez = parseInt(b.slice(z, z + 3), 16);
+      namez = parseInt(b.subarray(z, z + 3), 16);
       z += 3;
-      name = b.slice(z, z+namez).toString();
+      name = utf8.decode(b, z, z+namez);
       z += namez;
     } else if (t === MsgTypeRetryRes) {
-      wait = parseInt(b.slice(z, z + 8), 16);
+      wait = parseInt(b.subarray(z, z + 8), 16);
       z += 8
     }
 
-    size = parseInt(b.slice(z, z + 8), 16);
+    size = parseInt(b.subarray(z, z + 8), 16);
 
     return {t:t, id:id, name:name, wait:wait, size:size};
   },

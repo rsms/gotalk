@@ -26,7 +26,7 @@ if (typeof TextDecoder !== 'undefined') {
   exports.decode = function decode(b, start, end) {
     if (start || end) {
       if (!start) start = 0;
-      b = b.slice(start, end || b.length - start);
+      b = b.subarray(start, end || b.length - start);
     }
     return decoder.decode(b);
   };

@@ -56,24 +56,26 @@ function buildAll() {
   fs.writeFileSync(tmpsrcfile, source);
 
   console.log('write js/gotalk.js, js/gotalk.js.map');
-  var p = subprocess.spawnSync("uglifyjs", [
+  var p = subprocess.spawnSync(__dirname + "/node_modules/.bin/terser", [
     '.gotalk-debug.js',
     '--output', 'gotalk.js',
     '--mangle',
+    '--ecma', '6',
     // '--define', 'window',
     // '--reserved', 'window',
     '--lint',
     '--compress',
-    '--source-map', __dirname + '/gotalk.js.map',
+    '--source-map',
     // '--source-map-root', './',
-    '--source-map-url', 'gotalk.js.map',
-    '--source-map-include-sources',
+    // '--source-map-url', 'gotalk.js.map',
+    // '--source-map-include-sources',
     '--screw-ie8',
   ], {
-    cwd: __dirname
+    cwd: __dirname,
+    stdio: 'inherit',
   });
-  if (p.error) {
-    throw p.error;
+  if (p.status == 1) {
+    process.exit(1)
   }
 
   buildGoFile();

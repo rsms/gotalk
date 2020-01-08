@@ -1,0 +1,14 @@
+{
+  "name": "gotalk",
+  "version": "1.0.0",
+  "description": "Gotalk client library",
+  "main": "gotalk.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "terser": "^4.6.2"
+  }
+}

@@ -300,7 +300,7 @@ msgHandlers[protocol.MsgTypeSingleReq] = function (msg, payload) {
 };
 
 function handleRes(msg, payload) {
-  var id = typeof msg.id === 'string' ? msg.id : msg.id.toString();
+  var id = msg.id;
   var s = this, callback = s.pendingRes[id];
   if (msg.t !== protocol.MsgTypeStreamRes || !payload || (payload.length || payload.size) === 0) {
     delete s.pendingRes[id];
@@ -595,7 +595,7 @@ Sock.prototype.open = function(addr, callback) {
 
 
 // Open a connection to a gotalk responder.
-// 
+//
 // open(addr string[, onConnect(Error, Sock)]) -> Sock
 //   Connect to gotalk responder at `addr`
 //
