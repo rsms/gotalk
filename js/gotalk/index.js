@@ -19,10 +19,14 @@ function decodeJSON(v) {
 
 // ===============================================================================================
 
-function Sock(handlers) { return Object.create(Sock.prototype, {
+function Sock(handlers, proto) { return Object.create(Sock.prototype, {
   // Public properties
   handlers:      {value:handlers, enumerable:true},
-  protocol:      {value: Buf ? protocol.binary : protocol.text, enumerable:true, writable:true},
+  protocol:      {
+    value:      proto || (Buf ? protocol.binary : protocol.text),
+    enumerable: true,
+    writable:   true
+  },
   heartbeatInterval: {value: 20 * 1000, enumerable:true, writable:true},
 
   // Internal
@@ -624,8 +628,8 @@ Sock.prototype.open = function(addr, callback) {
 //   Connect to default gotalk responder.
 //   Throws an error if `gotalk.defaultResponderAddress` isn't defined.
 //
-gotalk.open = function(addr, onConnect) {
-  return Sock(gotalk.defaultHandlers).open(addr, onConnect);
+gotalk.open = function(addr, onConnect, handlers, proto) {
+  return Sock(handlers || gotalk.defaultHandlers, proto).open(addr, onConnect);
 };
 
 
@@ -644,8 +648,8 @@ Sock.prototype.openKeepAlive = function(addr) {
 // Returns a new Sock with a persistent connection to a gotalk responder.
 // The Connection is automatically kept alive (by reconnecting) until Sock.end() is called.
 // If `addr` is not provided, `gotalk.defaultResponderAddress` is used instead.
-gotalk.connection = function(addr) {
-  return Sock(gotalk.defaultHandlers).openKeepAlive(addr);
+gotalk.connection = function(addr, handlers, proto) {
+  return Sock(handlers || gotalk.defaultHandlers, proto).openKeepAlive(addr);
 };
 
 
