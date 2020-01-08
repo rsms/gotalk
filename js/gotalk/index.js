@@ -13,7 +13,15 @@ gotalk.protocol = protocol;
 gotalk.Buf = Buf;
 
 function decodeJSON(v) {
-  try { return JSON.parse(v); } catch (e) {}
+  if (typeof v != "string") {
+    v = utf8.decode(v)
+  }
+  try {
+    return JSON.parse(v);
+  } catch (err) {
+    if (typeof console != "undefined" && console.warn)
+    console.warn("[gotalk] ignoring invalid json", v)
+  }
 }
 
 

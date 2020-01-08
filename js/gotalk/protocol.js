@@ -62,6 +62,11 @@ exports.binary = {
   // -> {t:string, id:Buf, name:string, wait:int size:int} | null
   parseMsg: function (b) {
     var t, id, name, namez, wait = 0, size = 0, z;
+    // Example:
+    // R000A00000006
+    // R             = type response
+    //  0000         = id   10
+    //      00000006 = size 6
 
     t = b[0];
     z = 1;
