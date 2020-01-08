@@ -42,7 +42,10 @@ function makeBufFixnum(n, digits) {
   return b;
 }
 
-// Note: This code assumes parseInt accepts a Buf
+function parseIntBuf(b, radix) {
+  return parseInt(String.fromCharCode(...b), radix)
+}
+
 
 exports.binary = {
 
@@ -51,7 +54,7 @@ exports.binary = {
   versionBuf: makeBufFixnum(exports.Version, 2),
 
   parseVersion: function (b) {
-    return parseInt(b, 16);
+    return parseIntBuf(b, 16);
   },
 
   // Parses a byte buffer containing a message (not including payload data.)
@@ -64,7 +67,7 @@ exports.binary = {
     z = 1;
 
     if (t === MsgTypeHeartbeat) {
-      wait = parseInt(b.subarray(z, z + 4), 16);
+      wait = parseIntBuf(b.subarray(z, z + 4), 16);
       z += 4;
     } else if (t !== MsgTypeNotification && t !== MsgTypeProtocolError) {
       id = b.subarray(z, z + 4);
@@ -72,16 +75,16 @@ exports.binary = {
     }
 
     if (t == MsgTypeSingleReq || t == MsgTypeStreamReq || t == MsgTypeNotification) {
-      namez = parseInt(b.subarray(z, z + 3), 16);
+      namez = parseIntBuf(b.subarray(z, z + 3), 16);
       z += 3;
-      name = utf8.decode(b, z, z+namez);
+      name = utf8.decode(b.subarray(z, z + namez));
       z += namez;
     } else if (t === MsgTypeRetryRes) {
-      wait = parseInt(b.subarray(z, z + 8), 16);
+      wait = parseIntBuf(b.subarray(z, z + 8), 16);
       z += 8
     }
 
-    size = parseInt(b.subarray(z, z + 8), 16);
+    size = parseIntBuf(b.subarray(z, z + 8), 16);
 
     return {t:t, id:id, name:name, wait:wait, size:size};
   },
@@ -90,8 +93,9 @@ exports.binary = {
   makeMsg: function (t, id, name, wait, size) {
     var b, nameb, z = id ? 13 : 9;
 
+    // if there's a name, encode as utf8 and increase buffer size
     if (name && name.length !== 0) {
-      nameb = Buf.fromString(name);
+      nameb = utf8.encode(name);
       z += 3 + nameb.length;
     }
 
@@ -115,11 +119,10 @@ exports.binary = {
       z += 4;
     }
 
-    if (name && name.length !== 0) {
-      nameb = Buf.fromString(name);
+    if (nameb) {
       copyBufFixnum(b, z, nameb.length, 3);
       z += 3;
-      nameb.copy(b, z);
+      b.set(nameb, z);
       z += nameb.length;
     }
 

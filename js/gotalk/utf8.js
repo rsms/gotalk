@@ -1,7 +1,7 @@
 "use strict";
 //
-// decode(Buf, [start], [end]) -> String
-// encode(String, BufFactory) -> Buf
+// decode(Buf) -> String
+// encode(String) -> Buf
 // sizeOf(String) -> int
 //
 
@@ -23,24 +23,20 @@ if (typeof TextDecoder !== 'undefined') {
   var decoder = new TextDecoder('utf8');
   var encoder = new TextEncoder('utf8');
 
-  exports.decode = function decode(b, start, end) {
-    if (start || end) {
-      if (!start) start = 0;
-      b = b.subarray(start, end || b.length - start);
-    }
+  exports.decode = function decode(b) {
     return decoder.decode(b);
   };
 
-  exports.encode = function encode(s, Buf) {
-    return Buf(encoder.encode(s));
+  exports.encode = function encode(s) {
+    return encoder.encode(s);
   };
 
 } else {
   // ============================================================================================
   // JS implementation
 
-  exports.decode = function decode(b, start, end) {
-    var i = start || 0, e = (end || b.length - i), c, lead, s = '';
+  exports.decode = function decode(b) {
+    var i = 0, e = b.length - i, c, lead, s = '';
     for (i = 0; i < e; ) {
       c = b[i++];
       lead = mask8(c);
@@ -62,8 +58,8 @@ if (typeof TextDecoder !== 'undefined') {
     return s;
   };
 
-  exports.encode = function encode(s, Buf) {
-    var i = 0, e = s.length, c, j = 0, b = Buf(sizeOf(s));
+  exports.encode = function encode(s) {
+    var i = 0, e = s.length, c, j = 0, b = new Uint8Array(sizeOf(s));
     for (; i !== e;) {
       c = s.charCodeAt(i++);
       // TODO FIXME: charCodeAt returns UTF16-like codepoints, not UTF32 codepoints, meaning that

@@ -301,6 +301,10 @@ msgHandlers[protocol.MsgTypeSingleReq] = function (msg, payload) {
 
 function handleRes(msg, payload) {
   var id = msg.id;
+  if (typeof id != "string") {
+    // then it's a Buf
+    id = String.fromCharCode(...id)
+  }
   var s = this, callback = s.pendingRes[id];
   if (msg.t !== protocol.MsgTypeStreamRes || !payload || (payload.length || payload.size) === 0) {
     delete s.pendingRes[id];
@@ -312,7 +316,10 @@ function handleRes(msg, payload) {
     return; // ignore message
   }
   if (msg.t === protocol.MsgTypeErrorRes) {
-    callback(new Error(String(payload)), null);
+    if (typeof payload != "string") {
+      payload = utf8.decode(payload)
+    }
+    callback(new Error(payload), null);
   } else {
     callback(null, payload);
   }
@@ -415,6 +422,20 @@ Sock.prototype.notify = function(op, value) {
   var buf = JSON.stringify(value);
   return this.bufferNotify(op, buf);
 };
+
+
+if (typeof Promise != "undefined") {
+  Sock.prototype.requestp = function(op, value) {
+    return new Promise((resolve, reject) => {
+      this.request(op, value, (err, res) => err ? reject(err) : resolve(res))
+    })
+  }
+  Sock.prototype.bufferRequestp = function(op, buf) {
+    return new Promise((resolve, reject) => {
+      this.bufferRequest(op, buf, (err, res) => err ? reject(err) : resolve(res))
+    })
+  }
+}
 
 
 // ===============================================================================================

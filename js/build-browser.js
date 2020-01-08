@@ -180,6 +180,8 @@ function bufToByteStr(buf, enclosedByChar, breakUpLines) {
 
 buildAll();
 
-console.log('Watching for changes...');
-fs.watch(srcDir, buildAll);
-fs.watch(browserFile, buildAll);
+if (process.argv.includes("-watch")) {
+  console.log('Watching for changes...');
+  fs.watch(srcDir, buildAll);
+  fs.watch(browserFile, buildAll);
+}

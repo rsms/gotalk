@@ -16,14 +16,6 @@ Buf = function Buf(v) {
     );
 };
 
-Buf.isBuf = function (v) {
-  return v instanceof Uint8Array;
-};
-
-Buf.fromString = function (s, encoding) {
-  return utf8.encode(s, Buf);
-};
-
 }
 
 module.exports = Buf;
