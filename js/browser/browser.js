@@ -1,4 +1,4 @@
-(function(global){
+(function(exports, global){
 "use strict";
 
 var __mod = {}, __api = {}, __main, __mainapi;
@@ -28,8 +28,15 @@ var require = function(name) {
 
 ${MODULES_SRC}
 
-__mainapi = {exports:{}};
+__mainapi = {exports: exports};
 __main(__mainapi);
 
-global.gotalk = __mainapi.exports;
-})(this);
+if (typeof module != "undefined") {
+  module.exports = __mainapi.exports;
+  module.__esModule = true;
+  module["default"] = __mainapi.exports;
+} else if (global) {
+  global["gotalk"] = __mainapi.exports;
+}
+
+})(typeof exports != "undefined" ? exports : {}, this);

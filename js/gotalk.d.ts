@@ -1,38 +1,68 @@
+export default gotalk
+
+declare namespace gotalk {
+
 type int = number
 
 // connection() creates a persistent (keep-alive) connection to a gotalk responder.
 // If `addr` is not provided, `defaultResponderAddress` is used.
 // Equivalent to `Sock(handlers, proto).openKeepAlive(addr)`
-declare function connection<T>(
+function connection<T>(
   addr :string | undefined,
   handlers :Handlers<T> | undefined,
   proto? :Protocol<T>
 ) :Sock<T>
-declare function connection(addr? :string) :Sock<Uint8Array>
+function connection(addr? :string) :Sock<Uint8Array>
 
 // Open a connection to a gotalk responder.
 // If `addr` is not provided, `defaultResponderAddress` is used.
 // Equivalent to `Sock(handlers, proto).open(addr, onconnect)`
-declare function open<T>(
+function open<T>(
   addr       :string | undefined,
   onconnect  :((e:Error,s:Sock<Uint8Array>)=>void) | undefined,
   handlers   :Handlers<T> | undefined,
   proto?     :Protocol<T>
 ) :Sock<T>
-declare function open(
+function open(
   addr?      :string | undefined,
   onconnect? :((e:Error,s:Sock<Uint8Array>)=>void) | undefined,
 ) :Sock<Uint8Array>
 
 // Default `Handlers` utilized by the module-level `handle*` functions
 // The type is Handlers<Uint8Array> by default.
-declare var defaultHandlers :Handlers<Uint8Array>|Handlers<string>
+var defaultHandlers :Handlers<Uint8Array>|Handlers<string>
 
 // Default address to connect to. This is falsey if the JS library isn't served by gotalk.
-declare var defaultResponderAddress :string
+var defaultResponderAddress :string
 
 // Sock creates a socket
-declare function Sock<T>(handlers :Handlers<T>, proto? :Protocol<T>) :Sock<T>
+function Sock<T>(handlers :Handlers<T>, proto? :Protocol<T>) :Sock<T>
+
+
+// Convenience "shortcuts" to `defaultHandlers`
+//
+// Register a handler for an operation `op`. If `op` is the empty string the
+// handler will be registered as a "fallback" handler, meaning that if there are
+// no handlers registered for request "x", the fallback handler will be invoked.
+function handleRequest<In=any,Out=any>(
+  op :string,
+  h :(data :In, resolve :Resolver<Out>, op :string)=>void,
+) :void
+function handleBufferRequest<T=Uint8Array>(
+  op :string,
+  h :(data :T, resolve :Resolver<T>, op :string)=>void,
+) :void
+//
+// Register a handler for notification `name`. Just as with request handlers,
+// registering a handler for the empty string means it's registered as the fallback handler.
+function handleNotification<In=any>(
+  name :string,
+  h :(data :In, name :string)=>void,
+) :void
+function handleBufferNotification<T=Uint8Array>(
+  name :string,
+  h :(data :T, name :string)=>void,
+) :void
 
 
 interface SockEventMap {
@@ -42,7 +72,7 @@ interface SockEventMap {
 }
 
 
-declare interface Sock<T> extends EventEmitter<SockEventMap> {
+interface Sock<T> extends EventEmitter<SockEventMap> {
   readonly ws       :WebSocket    // underlying connection
   readonly handlers :Handlers<T>
   readonly protocol :Protocol<T>
@@ -115,12 +145,15 @@ interface Handlers<T> {
   // Register a handler for an operation `op`. If `op` is the empty string the
   // handler will be registered as a "fallback" handler, meaning that if there are
   // no handlers registered for request "x", the fallback handler will be invoked.
-  handleRequest(op :string, h :(data :any, resolve :Resolver<any>, op :string)=>void) :void
+  handleRequest<In=any,Out=any>(
+    op :string,
+    h :(data :In, resolve :Resolver<Out>, op :string)=>void,
+  ) :void
   handleBufferRequest(op :string, h :(data :T, resolve :Resolver<T>, op :string)=>void) :void
 
   // Register a handler for notification `name`. Just as with request handlers,
   // registering a handler for the empty string means it's registered as the fallback handler.
-  handleNotification(name :string, h :(data :any, name :string)=>void) :void
+  handleNotification<In=any>(name :string, h :(data :In, name :string)=>void) :void
   handleBufferNotification(name :string, h :(data :T, name :string)=>void) :void
 
   // Find request and notification handlers
@@ -129,7 +162,7 @@ interface Handlers<T> {
 }
 
 // Create a new Handlers object
-declare function Handlers<T>() :Handlers<T>
+function Handlers<T>() :Handlers<T>
 
 interface Resolver<T> {
   (value :T) :void
@@ -157,7 +190,7 @@ interface StreamRequest<T> extends EventEmitter<StreamRequestEventMap<T>> {
 // Create a StreamRequest operating on a certain socket `s`.
 // This is a low-level function. See `Sock.streamRequest()` for a higher-level function,
 // which sets up response tracking, generates a request ID, etc.
-declare function StreamRequest<T>(s :Sock<T>, op :string, id :string) :StreamRequest<T>
+function StreamRequest<T>(s :Sock<T>, op :string, id :string) :StreamRequest<T>
 
 
 interface Protocol<T> {
@@ -178,7 +211,7 @@ interface Protocol<T> {
 }
 
 
-declare namespace protocol {
+namespace protocol {
   // The version of the protocol implementation
   const Version = 1
 
@@ -213,10 +246,17 @@ declare namespace protocol {
 type EventHandler<T=any> = (data :T)=>void
 
 interface EventEmitter<EventMap = {[k:string]:any}> {
-  addListener<K extends keyof EventMap>(e :K, handler :EventHandler<EventMap[K]>) :this
   on<K extends keyof EventMap>(e :K, handler :EventHandler<EventMap[K]>) :this
+  once<K extends keyof EventMap>(e :K, handler :EventHandler<EventMap[K]>) :this
+  addListener<K extends keyof EventMap>(e :K, handler :EventHandler<EventMap[K]>) :this
   removeListener<K extends keyof EventMap>(e :K, handler :EventHandler<EventMap[K]>) :void
   removeListeners<K extends keyof EventMap>(e :K) :void
   removeAllListeners() :void
-  triggerEvent<K extends keyof EventMap>(e :K, data? :EventMap[K]) :void
+  emit<K extends keyof EventMap>(e :K, data? :EventMap[K]) :void
 }
+
+const EventEmitter : {
+  mixin<T>(obj :T) :(T & EventEmitter)
+}
+
+} // namespace gotalk
