@@ -2,6 +2,9 @@ Demonstrates using streaming requests and results.
 
     go build && ./stream
 
+Note: This example requires internet access as it contacts `http://api.icndb.com/jokes/random`
+to get a random quote.
+
 Messages sent by `requestor` and received by `responder`:
 
     01

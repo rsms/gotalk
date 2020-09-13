@@ -11,7 +11,7 @@ func requestor(port string) {
   if err != nil {
     panic(err)
   }
-  println("connected to", s.Addr())
+  fmt.Printf("connected to %q\n", s.Addr())
 
   // We use a single channel for receiving all responses
   reschan := make(chan gotalk.Response)

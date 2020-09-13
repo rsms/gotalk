@@ -8,7 +8,7 @@ import (
 func responder(port string) {
   // A simple echo operation with a 500ms response delay
   gotalk.HandleBufferRequest("echo", func(s *gotalk.Sock, op string, buf []byte) ([]byte, error) {
-    println("responder: handling request")
+    fmt.Printf("responder: handling request\n")
     return buf, nil
   })
 
@@ -23,11 +23,11 @@ func responder(port string) {
     fmt.Printf("responder: received heartbeat: load=%v, time=%v\n", load, t)
   }
 
-  // Configure limits with a read timeout of one second
+  // Configure limits with a read timeout of 200 milliseconds
   s.Limits = gotalk.NewLimits(0, 0)
-  s.Limits.SetReadTimeout(time.Second)
+  s.Limits.SetReadTimeout(200 * time.Millisecond)
 
   // Accept connections
-  println("responder: listening at", s.Addr())
+  fmt.Printf("responder: listening at %q\n", s.Addr())
   go s.Accept()
 }

@@ -40,8 +40,5 @@ func main() {
   ws.OnAccept = onAccept
   http.Handle("/gotalk/", ws)
   http.Handle("/", http.FileServer(http.Dir(".")))
-  err := http.ListenAndServe(":1234", nil)
-  if err != nil {
-    panic(err)
-  }
+  panic(http.ListenAndServe(":1234", nil))
 }

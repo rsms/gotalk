@@ -158,8 +158,6 @@ func main() {
   http.Handle("/gotalk/", gotalkws)
 
   http.Handle("/", http.FileServer(http.Dir(".")))
-  err := http.ListenAndServe(":1235", nil)
-  if err != nil {
-    panic("ListenAndServe: " + err.Error())
-  }
+  print("Listening on http://0.0.0.0:1235/\n")
+  panic(http.ListenAndServe(":1235", nil))
 }

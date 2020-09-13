@@ -1,6 +1,7 @@
 package main
 import (
   "time"
+  "fmt"
   "github.com/rsms/gotalk"
 )
 
@@ -8,7 +9,7 @@ import (
 func responder(port string) {
   // A simple echo operation with a 500ms response delay
   gotalk.HandleBufferRequest("echo", func(s *gotalk.Sock, op string, buf []byte) ([]byte, error) {
-    println("responder: handling request")
+    fmt.Printf("responder: handling request\n")
     time.Sleep(time.Millisecond * 400)
     return buf, nil
   })
@@ -23,6 +24,6 @@ func responder(port string) {
   s.Limits = gotalk.NewLimits(5, 0)
 
   // Accept connections
-  println("listening at", s.Addr())
+  fmt.Printf("listening at %q\n", s.Addr())
   go s.Accept()
 }

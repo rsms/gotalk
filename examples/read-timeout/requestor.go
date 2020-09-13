@@ -6,6 +6,7 @@ import (
   "io"
 )
 
+// slowWriter simulates slow writing, to demonstrate timeout
 type slowWriter struct {
   c     io.ReadWriteCloser
   delay time.Duration
@@ -16,7 +17,7 @@ func (rwc *slowWriter) Read(p []byte) (n int, err error) {
     // Note: This is a completely unreliable way of detecting messages. It works because
     // we are not sending any payloads starting with the byte 'e'.
     if p[0] == byte(gotalk.MsgTypeRetryRes) {
-      println("requestor: Server asked us to retry the request")
+      fmt.Printf("requestor: Server asked us to retry the request\n")
     }
   }
   return
@@ -49,10 +50,10 @@ func sendRequest(s *gotalk.Sock) {
 func timeoutRequest(port string) {
   s, err := gotalk.Connect("tcp", "localhost:"+port)
   if err != nil { panic(err) }
-  println("requestor: connected to", s.Addr())
+  fmt.Printf("requestor: connected to %q\n", s.Addr())
 
   // Wrap the connection for slow writing to simulate a poor connection
-  s.Adopt(&slowWriter{s.Conn(), 2 * time.Second})
+  s.Adopt(&slowWriter{s.Conn(), 1000 * time.Millisecond})
 
   // Send a request -- it will take too long and time out
   sendRequest(s)
@@ -64,9 +65,9 @@ func timeoutRequest(port string) {
 func heartbeatKeepAlive(port string) {
   s, err := gotalk.Connect("tcp", "localhost:"+port)
   if err != nil { panic(err) }
-  println("requestor: connected to", s.Addr())
+  fmt.Printf("requestor: connected to %q\n", s.Addr())
 
-  // As the responder has a one second timeout, set our heartbeat interval to half that time
+  // set our heartbeat interval to half that time of the responder timeout
   s.HeartbeatInterval = 500 * time.Millisecond
 
   // Sleep for 3 seconds

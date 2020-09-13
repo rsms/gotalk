@@ -10,8 +10,6 @@ func main() {
   })
   http.Handle("/gotalk/", gotalk.WebSocketHandler())
   http.Handle("/", http.FileServer(http.Dir(".")))
-  err := http.ListenAndServe("localhost:1234", nil)
-  if err != nil {
-    panic(err)
-  }
+  println("Listening on http://localhost:1234/")
+  panic(http.ListenAndServe("localhost:1234", nil))
 }

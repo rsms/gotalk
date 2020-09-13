@@ -1,10 +1,9 @@
 // A simple example of two connected sockets communicating with eachother
 package main
 import (
-  "log"
+  "fmt"
   "github.com/rsms/gotalk"
 )
-
 
 func requestGreet(s *gotalk.Sock, name string) string {
   r := ""
@@ -33,8 +32,8 @@ func main() {
   })
 
   // Send a "greet" request to each socket, making the opposite side respond.
-  log.Printf("greet(s1, \"Bob\")  => %+v\n", requestGreet(s1, "Bob"))
-  log.Printf("greet(s2, \"Lisa\") => %+v\n", requestGreet(s2, "Lisa"))
+  fmt.Printf("greet(s1, \"Bob\")  => %+v\n", requestGreet(s1, "Bob"))
+  fmt.Printf("greet(s2, \"Lisa\") => %+v\n", requestGreet(s2, "Lisa"))
 
   // Output
   //   greet(s1, "Bob")  => {Greeting:Hello Bob from socket#2}
