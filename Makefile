@@ -34,7 +34,7 @@ release:
 	$(MAKE) test
 	@echo "Finally, run the following to publish v${VERSION}:"
 	@echo "  git tag v${VERSION}"
-	@echo "  git push origin v${VERSION}"
+	@echo "  git push origin v${VERSION} master"
 
 
 dist: release
