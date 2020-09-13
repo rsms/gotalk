@@ -2,6 +2,46 @@
 
 [Gotalk](https://github.com/rsms/gotalk) exists to make it easy for programs to *talk with one another over the internet*, like a web app coordinating with a web server, or a bunch of programs dividing work amongst eachother.
 
+## Use & Installation
+Gotalk is a simple go module. Simply import it into your program and `go build`:
+
+```go
+import "github.com/rsms/gotalk@v1.0.1"
+```
+
+**Examples** can be found in the [`examples`](examples/) directory.
+Build them with `go build`:
+
+```
+$ cd examples/websocket-chat
+$ go build
+$ ./websocket-chat
+Listening on http://0.0.0.0:1235/
+```
+
+Here's a minimal but complete example program: (`examples/websocket-minimal`)
+
+```go
+package main
+import (
+  "net/http"
+  "github.com/rsms/gotalk"
+)
+
+func main() {
+  gotalk.Handle("echo", func(in string) (string, error) {
+    return in, nil
+  })
+  http.Handle("/gotalk/", gotalk.WebSocketHandler())
+  http.Handle("/", http.FileServer(http.Dir(".")))
+  print("Listening on http://localhost:1234/\n")
+  panic(http.ListenAndServe("localhost:1234", nil))
+}
+```
+
+
+## Introduction
+
 ![A terribly boring amateur comic strip](https://github.com/rsms/gotalk/raw/master/doc/gotalk-comic.png)
 
 Gotalk takes the natural approach of *bidirectional* and *concurrent* communication — any peer have the ability to expose "operations" as well as asking other peers to perform operations. The traditional restrictions of who can request and who can respond usually associated with a client-server model is nowhere to be found in gotalk.
