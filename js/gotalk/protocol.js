@@ -42,9 +42,50 @@ function makeBufFixnum(n, digits) {
   return b;
 }
 
-function parseIntBuf(b, radix) {
-  return parseInt(String.fromCharCode(...b), radix)
+
+// parseHexInt(['0','0','A','3']) => 0xA3
+function parseHexInt(bytes) {
+  var val = 0, i = 0, c = 0, err = false
+  for (; i < bytes.length; i++) {
+    c = bytes[i]
+    if (c < 0x40) { // 0-9
+      if (c < 0x30) {
+        err = true
+      }
+      c -= 0x30
+    } else if (c < 0x47) { // A-F
+      if (c < 0x41) {
+        err = true
+      }
+      c -= 0x37
+    } else if (c < 0x67 && 0x60 < c) { // a-f
+      c -= 0x57
+    } else {
+      err = true
+    }
+    val = (val << 4) | (c & 0xF)
+  }
+  if (err) {
+    throw new Error("invalid hexint " + String.fromCharCode.apply(null, bytes))
+  }
+  return val
 }
+
+// test parseHexInt
+/*function testh(input, expected) {
+  var actual = parseHexInt(input.split("").map(function(c) { return c.charCodeAt(0) }))
+  if (actual.toString(16) != expected) {
+    throw new Error("test(" + input + ") expected " + expected + " but got " + actual)
+  }
+}
+testh("00A3", "a3")
+testh("0000001f", "1f")
+
+function parseHexIntSlow(b) {
+  return parseInt(String.fromCharCode.apply(null, b), 16)
+}
+*/
+
 
 
 exports.binary = {
@@ -53,9 +94,7 @@ exports.binary = {
 
   versionBuf: makeBufFixnum(exports.Version, 2),
 
-  parseVersion: function (b) {
-    return parseIntBuf(b, 16);
-  },
+  parseVersion: parseHexInt,
 
   // Parses a byte buffer containing a message (not including payload data.)
   // If t is MsgTypeHeartbeat, wait==load, size==time.
@@ -72,7 +111,7 @@ exports.binary = {
     z = 1;
 
     if (t === MsgTypeHeartbeat) {
-      wait = parseIntBuf(b.subarray(z, z + 4), 16);
+      wait = parseHexInt(b.subarray(z, z + 4));
       z += 4;
     } else if (t !== MsgTypeNotification && t !== MsgTypeProtocolError) {
       id = b.subarray(z, z + 4);
@@ -80,16 +119,16 @@ exports.binary = {
     }
 
     if (t == MsgTypeSingleReq || t == MsgTypeStreamReq || t == MsgTypeNotification) {
-      namez = parseIntBuf(b.subarray(z, z + 3), 16);
+      namez = parseHexInt(b.subarray(z, z + 3));
       z += 3;
       name = utf8.decode(b.subarray(z, z + namez));
       z += namez;
     } else if (t === MsgTypeRetryRes) {
-      wait = parseIntBuf(b.subarray(z, z + 8), 16);
+      wait = parseHexInt(b.subarray(z, z + 8));
       z += 8
     }
 
-    size = parseIntBuf(b.subarray(z, z + 8), 16);
+    size = parseHexInt(b.subarray(z, z + 8));
 
     return {t:t, id:id, name:name, wait:wait, size:size};
   },

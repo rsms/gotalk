@@ -91,6 +91,8 @@ interface Sock<T> extends EventEmitter<SockEventMap> {
 
   // Send request for operation `op` with `value` as the payload, using JSON for encoding.
   request(op :string, value :any, cb :(e :Error, result :any)=>void) :void
+
+  // Promise version of request
   requestp(op :string, value :any) :Promise<any>
 
   // Send a request for operation `op` with raw-buffer `buf` as the payload,
@@ -98,6 +100,8 @@ interface Sock<T> extends EventEmitter<SockEventMap> {
   // — a server sending a "text" frame means the result is a string, while a
   // server sending a "binary" frame causes the result to be a Uint8Array.
   bufferRequest(op :string, buf :T|null, cb :(e :Error, result :T)=>void) :void
+
+  // Promise version of bufferRequest
   bufferRequestp(op :string, buf :T|null) :Promise<T>
 
   // Create a StreamRequest for operation `op` which is ready to be used.

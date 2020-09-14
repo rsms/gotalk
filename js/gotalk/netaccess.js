@@ -1,8 +1,9 @@
 "use strict";
 var EventEmitter = require('./EventEmitter');
+var global = require('./env')
 var m;
 
-if (typeof global !== 'undefined' && global.addEventListener) {
+if (global.addEventListener) {
   m = Object.create(EventEmitter.prototype, {
     available: {value:true, enumerable:true},
     onLine:    {value:true, enumerable:true, writable:true}

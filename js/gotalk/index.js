@@ -6,8 +6,10 @@ var Buf = require('./buf');
 var utf8 = require('./utf8');
 var EventEmitter = require('./EventEmitter');
 var keepalive = require('./keepalive');
+var global = require('./env').global
 
 var gotalk = exports;
+export default exports
 
 gotalk.protocol = protocol;
 gotalk.Buf = Buf;
@@ -315,7 +317,7 @@ function handleRes(msg, payload) {
   var id = msg.id;
   if (typeof id != "string") {
     // then it's a Buf
-    id = String.fromCharCode(...id)
+    id = String.fromCharCode.apply(null, id)
   }
   var s = this, callback = s.pendingRes[id];
   if (msg.t !== protocol.MsgTypeStreamRes || !payload || (payload.length || payload.size) === 0) {
@@ -427,26 +429,27 @@ Sock.prototype.request = function(op, value, callback) {
     var value = decodeJSON(buf);
     return callback(err, value);
   });
-};
+}
 
 
 Sock.prototype.notify = function(op, value) {
   var buf = JSON.stringify(value);
   return this.bufferNotify(op, buf);
-};
+}
 
 
-if (typeof Promise != "undefined") {
-  Sock.prototype.requestp = function(op, value) {
-    return new Promise((resolve, reject) => {
-      this.request(op, value, (err, res) => err ? reject(err) : resolve(res))
-    })
-  }
-  Sock.prototype.bufferRequestp = function(op, buf) {
-    return new Promise((resolve, reject) => {
-      this.bufferRequest(op, buf, (err, res) => err ? reject(err) : resolve(res))
-    })
-  }
+Sock.prototype.requestp = function(op, value) {
+  var s = this
+  return new Promise(function (resolve, reject) {
+    s.request(op, value, function(err, res) { err ? reject(err) : resolve(res) })
+  })
+}
+
+Sock.prototype.bufferRequestp = function(op, buf) {
+  var s = this
+  return new Promise(function (resolve, reject) {
+    s.bufferRequest(op, buf, function(err, res) { err ? reject(err) : resolve(res) })
+  })
 }
 
 
@@ -595,17 +598,34 @@ function openWebSocket(s, addr, callback) {
 }
 
 
-// gotalk.defaultResponderAddress is defined if the responder has announced a default address
-// to which connect to.
-if (global.gotalkResponderAt !== undefined) {
-  var at = global.gotalkResponderAt;
-  if (at && at.ws) {
-    gotalk.defaultResponderAddress =
-      (document.location.protocol == 'https:' ? 'wss://' : 'ws://') +
-      document.location.host + at.ws;
+// derive defaultResponderAddress from document.currentScript.src
+gotalk.defaultResponderAddress = (function() {
+  if (typeof document == 'undefined') {
+    return
   }
-  delete global.gotalkResponderAt;
-}
+  var s = document.currentScript.src
+  if (!s) {
+    return
+  }
+  var a = s.indexOf('://') + 3
+  if (a == 2) {
+    return
+  }
+  var proto = s.substr(0, a)
+  var b = s.indexOf('/', a)
+  if (b == -1) {
+    return
+  }
+  var host = s.substring(a, b)
+  s = s.substr(b)
+  a = s.lastIndexOf('?')
+  if (a != -1) {
+    // trim away query string
+    s = s.substr(0, a)
+  }
+  var path = s.substring(s.indexOf('/'), s.lastIndexOf('/') + 1)
+  return (proto == "https:" ? "wss://" : "ws://") + host + path
+})() || ""
 
 
 Sock.prototype.open = function(addr, callback) {
@@ -617,7 +637,7 @@ Sock.prototype.open = function(addr, callback) {
 
   if (!addr) {
     if (!gotalk.defaultResponderAddress) {
-      throw new Error('address not specified (responder has not announced any default address)')
+      throw new Error('address not specified (empty gotalk.defaultResponderAddress)')
     }
     addr = gotalk.defaultResponderAddress;
   }

@@ -1,0 +1,17 @@
+<!DOCTYPE HTML>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<script>
+let s = document.createElement("script")
+s.src = "gotalk.js?" + Date.now().toString(36)
+s.async = true
+document.head.appendChild(s)
+s.onload = () => {
+	console.log("gotalk:", gotalk)
+}
+		</script>
+	</head>
+	<body style="white-space:pre;font-family:monospace">
+	</body>
+</html>
