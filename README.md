@@ -2,7 +2,18 @@
 
 [Gotalk](https://github.com/rsms/gotalk) exists to make it easy for programs to *talk with one another over the internet*, like a web app coordinating with a web server, or a bunch of programs dividing work amongst each other.
 
-## Use & Installation
+Gotalk...
+
+- is an efficient and easily debuggable [generic data encoding protocol](#protocol-and-wire-format)
+- is transport agnostic: works on any byte stream
+- offers a high-level, easy-to-get-started API for WebSockets
+- includes a built-in JavaScript library (no separate files)
+- Go API is small and focused
+
+> [Go API Documentation on godoc.org →](https://godoc.org/github.com/rsms/gotalk)
+
+
+## Usage
 
 Gotalk is a simple go module - import it into your program and `go build`:
 
@@ -30,7 +41,6 @@ import (
   "net/http"
   "github.com/rsms/gotalk"
 )
-
 func main() {
   gotalk.Handle("echo", func(in string) (string, error) {
     return in, nil
@@ -510,26 +520,3 @@ For transports which might need "heartbeats" to stay alive, like some raw TCP co
 ## Other implementations
 
 - <https://github.com/gtaylor/python-gotalk>
-
-
-## MIT license
-
-Copyright (c) 2015 Rasmus Andersson <http://rsms.me/>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
