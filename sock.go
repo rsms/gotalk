@@ -1,14 +1,15 @@
 package gotalk
 import (
+  "crypto/tls"
   "encoding/json"
   "errors"
+  "fmt"
   "io"
   "log"
   "net"
-  "sync"
-  "fmt"
-  "time"
   "runtime"
+  "sync"
+  "time"
 )
 
 // Returned by (Sock)BufferRequest when a streaming response is recieved
@@ -89,19 +90,29 @@ func Pipe(handlers *Handlers, limits Limits) (*Sock, *Sock, error) {
 }
 
 
-// Connect to a server via `how` at `addr`. Unless there's an error, the returned socket is
-// already reading in a different goroutine and is ready to be used.
+// Connect to a server via `how` at `addr`.
+// Unless there's an error, the returned socket is already reading in a different
+// goroutine and is ready to be used.
 func Connect(how, addr string) (*Sock, error) {
   s := NewSock(DefaultHandlers)
   return s, s.Connect(how, addr, DefaultLimits)
 }
 
 
+// Connect to a server via `how` at `addr` over TLS.
+// Unless there's an error, the returned socket is already reading in a different
+// goroutine and is ready to be used.
+func ConnectTLS(how, addr string, config *tls.Config) (*Sock, error) {
+  s := NewSock(DefaultHandlers)
+  return s, s.ConnectTLS(how, addr, DefaultLimits, config)
+}
+
+
 // Adopt an I/O stream, which should already be in a "connected" state.
 // After adopting a new connection, you should call Handshake to perform the protocol
 // handshake, followed by Read to read messages.
-func (s *Sock) Adopt(c io.ReadWriteCloser) {
-  s.conn = c
+func (s *Sock) Adopt(r io.ReadWriteCloser) {
+  s.conn = r
   s.closeCode = -1
 }
 
@@ -113,13 +124,41 @@ func (s *Sock) Connect(how, addr string, limits Limits) error {
   if err != nil {
     return err
   }
-  s.Adopt(c)
+  return s.ConnectReader(c, limits)
+}
+
+
+// Connect to a server via `how` at `addr` over TLS.
+// tls.Config is optional; passing nil is equivalent to &tls.Config{}
+//
+func (s *Sock) ConnectTLS(how, addr string, limits Limits, config *tls.Config) error {
+  if config == nil {
+    config = &tls.Config{
+      RootCAs: TLSCertPool(),
+    }
+  } else if config.RootCAs == nil {
+    config = config.Clone()
+    config.RootCAs = TLSCertPool()
+  }
+  c, err := tls.Dial(how, addr, config)
+  if err != nil {
+    return err
+  }
+  return s.ConnectReader(c, limits)
+}
+
+
+// Take control over reader r, perform initial handshake
+// and begin communication on a background goroutine.
+func (s *Sock) ConnectReader(r io.ReadWriteCloser, limits Limits) error {
+  s.Adopt(r)
   if err := s.Handshake(); err != nil {
     return err
   }
   go s.Read(limits)
   return nil
 }
+
 
 // Access the socket's underlying connection
 func (s *Sock) Conn() io.ReadWriteCloser {

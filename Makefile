@@ -1,11 +1,16 @@
 VERSION = $(shell grep 'const Version =' version.go | cut -d '"' -f 2)
 
-test: *.go
+test:
 	go test
-	(cd examples/tcp          && go build && ./tcp >/dev/null)
-	(cd examples/pipe         && go build && ./pipe >/dev/null)
-	(cd examples/limits       && go build && ./limits >/dev/null)
-	(cd examples/read-timeout && go build && ./read-timeout >/dev/null)
+	@
+	@echo "go build examples/*"
+	@for d in examples/*; do (cd $$d && go build) & done ; wait
+	@
+	(cd examples/tcp          && ./tcp >/dev/null)
+	(cd examples/tls          && ./tls >/dev/null)
+	(cd examples/pipe         && ./pipe >/dev/null)
+	(cd examples/limits       && ./limits >/dev/null)
+	(cd examples/read-timeout && ./read-timeout >/dev/null)
 	@echo "All tests OK"
 
 
@@ -28,6 +33,10 @@ release:
 		echo "--------------------------------------------------" >&2; \
 		echo "Did you forget to update version.go?" >&2; \
 		echo "--------------------------------------------------" >&2; \
+		exit 1; \
+	fi
+	@if ! grep "## v${VERSION}" CHANGELOG.md; then \
+		echo "Missing '## v${VERSION}' in CHANGELOG.md" >&2; \
 		exit 1; \
 	fi
 	go mod tidy

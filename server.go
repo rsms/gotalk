@@ -1,5 +1,7 @@
 package gotalk
 import (
+  "crypto/tls"
+  "fmt"
   "net"
   "os"
   "os/signal"
@@ -13,7 +15,7 @@ type SockHandler func(*Sock)
 
 // Accepts socket connections
 type Server struct {
-  // Handlers associated with this listener. Accepted sockets inherit the value.
+  // Handlers associated with this server. Accepted sockets inherit the value.
   Handlers *Handlers
 
   // Limits. Accepted sockets are subject to the same limits.
@@ -31,63 +33,84 @@ type Server struct {
   // Template value for accepted sockets. Defaults to nil
   OnHeartbeat func(load int, t time.Time)
 
-  listener net.Listener
+  // Transport
+  Listener net.Listener
 }
 
 
 // Create a new server already listening on `l`
 func NewServer(h *Handlers, limits Limits, l net.Listener) *Server {
-  return &Server{Handlers:h, Limits:limits, listener:l}
+  return &Server{Handlers:h, Limits:limits, Listener:l}
 }
 
 
-type tcpKeepAliveListener struct {
-  *net.TCPListener
-}
-
-func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
-  tc, err := ln.AcceptTCP()
-  if err != nil {
-    return
-  }
-  tc.SetKeepAlive(true)
-  tc.SetKeepAlivePeriod(30 * time.Second)
-  return tc, nil
-}
-
-
-// Start a `how` server listening for connections at `addr`. You need to call Accept() on the
-// returned socket to start accepting connections. `how` and `addr` are passed to `net.Listen()`
-// and thus any values accepted by net.Listen are valid.
-// The returned server has Handlers=DefaultHandlers and Limits=DefaultLimits set.
+// Start a `how` server listening for connections at `addr`.
+// You need to call Accept() on the returned socket to start accepting connections.
+// `how` and `addr` are passed to `net.Listen()` and thus any values accepted by
+// net.Listen are valid.
+// The returned server has Handlers=DefaultHandlers and Limits=DefaultLimits set,
+// which you can change if you want.
 func Listen(how, addr string) (*Server, error) {
   l, err := net.Listen(how, addr)
   if err != nil {
     return nil, err
   }
-
-  if tcpl, ok := l.(*net.TCPListener); ok {
-    // Wrap TCP listener to enable TCP keep-alive
-    l = &tcpKeepAliveListener{tcpl}
-  }
-
+  l = wrapListener(l)
   s := NewServer(DefaultHandlers, DefaultLimits, l)
+  return s, nil
+}
 
-  if how == "unix" || how == "unixpacket" {
-    // Unix sockets must be unlink()ed before being reused again.
-    // Handle common process-killing signals so we can gracefully shut down.
+
+// Start a `how` server listening for connections at `addr` with TLS certificates.
+// You need to call Accept() on the returned socket to start accepting connections.
+// `how` and `addr` are passed to `net.Listen()` and thus any values accepted by
+// net.Listen are valid.
+// The returned server has Handlers=DefaultHandlers and Limits=DefaultLimits set,
+// which you can change if you want.
+func ListenTLS(how, addr string, certFile, keyFile string) (*Server, error) {
+  cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+  if err != nil {
+    return nil, err
+  }
+  return ListenTLSCustom(how, addr, &tls.Config{
+    RootCAs:      TLSCertPool(),
+    Certificates: []tls.Certificate{cert},
+  })
+}
+
+
+// Start a `how` server listening for connections at `addr` with custom TLS configuration.
+// You need to call Accept() on the returned socket to start accepting connections.
+// `how` and `addr` are passed to `net.Listen()` and thus any values accepted by
+// net.Listen are valid.
+// The returned server has Handlers=DefaultHandlers and Limits=DefaultLimits set,
+// which you can change if you want.
+func ListenTLSCustom(how, addr string, config *tls.Config) (*Server, error) {
+  l, err := net.Listen(how, addr)
+  if err != nil {
+    return nil, err
+  }
+  // must call wrapListener _before_ wrapping with tls.NewListener
+  l = tls.NewListener(wrapListener(l), config)
+  s := NewServer(DefaultHandlers, DefaultLimits, l)
+  return s, nil
+}
+
+
+// Unix sockets must be unlink()ed before being reused again.
+// If you don't manage this yourself already, this function provides a limited but
+// quick way to deal with cleanup by installing a signal handler.
+func (s *Server) EnableUnixSocketGC() {
+  // Handle common process-killing signals so we can gracefully shut down.
+  if _, ok := s.Listener.(*net.UnixListener); ok {
     sigc := make(chan os.Signal, 1)
     signal.Notify(sigc, os.Interrupt, os.Kill, syscall.SIGTERM)
     go func(c chan os.Signal) {
       <-c  // Wait for a signal
-      //sig := <-c  // Wait for a signal
-      //log.Printf("Caught signal %s: shutting down.", sig)
       s.Close()  // Stop listening and unlink the socket
       os.Exit(0)
     }(sigc)
   }
-
-  return s, nil
 }
 
 
@@ -106,7 +129,7 @@ func Serve(how, addr string, acceptHandler SockHandler) error {
 func (s *Server) Accept() error {
   var tempDelay time.Duration // how long to sleep on accept failure
   for {
-    c, e := s.listener.Accept()
+    c, e := s.Listener.Accept()
     if e != nil {
       if ne, ok := e.(net.Error); ok && ne.Temporary() {
         if tempDelay == 0 {
@@ -142,8 +165,8 @@ func (s *Server) accept(c net.Conn) {
 
 // Address this server is listening at
 func (s *Server) Addr() string {
-  if s.listener != nil {
-    return s.listener.Addr().String()
+  if s.Listener != nil {
+    return s.Listener.Addr().String()
   }
   return ""
 }
@@ -151,10 +174,41 @@ func (s *Server) Addr() string {
 
 // Stop listening for and accepting connections
 func (s *Server) Close() error {
-  if s.listener != nil {
-    err := s.listener.Close()
-    s.listener = nil
+  if s.Listener != nil {
+    err := s.Listener.Close()
+    s.Listener = nil
     return err
   }
   return nil
+}
+
+
+// --------------------------------------------------------------
+// internals
+
+
+type tcpKeepAliveListener struct {
+  *net.TCPListener
+}
+func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
+  tc, err := ln.AcceptTCP()
+  if err != nil {
+    return
+  }
+  tc.SetKeepAlive(true)
+  tc.SetKeepAlivePeriod(30 * time.Second)
+  return tc, nil
+}
+
+
+// called by NewServer. Possibly wrap a listener.
+// Safe to call multiple times on the result.
+// I.e. wrapListener(l) == wrapListener(wrapListener(l))
+func wrapListener(l net.Listener) net.Listener {
+  if tcpl, ok := l.(*net.TCPListener); ok {
+    // Wrap TCP listener to enable TCP keep-alive
+    return &tcpKeepAliveListener{tcpl}
+  }
+  fmt.Printf("[wrapListener] other type %T\n", l)
+  return l
 }
