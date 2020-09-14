@@ -115,16 +115,16 @@ func TestWriteReadMsg(t *testing.T) {
 	assertReadMsg(t, s, &testMsg{MsgTypeNotification, "", "a", 0, 0})
 
 	m := []*testMsg{
-		&testMsg{MsgTypeSingleReq, "abcd", "echo", 0, 0},
-		&testMsg{MsgTypeSingleReq, "zzzz", "lolcats", 0, 3},
-		&testMsg{MsgTypeStreamReq, "abcd", "echo", 0, 4},
-		&testMsg{MsgTypeStreamReqPart, "abcd", "", 0, 5},
-		&testMsg{MsgTypeSingleRes, "abcd", "", 0, 6},
-		&testMsg{MsgTypeStreamRes, "abcd", "", 0, 7},
-		&testMsg{MsgTypeErrorRes, "abcd", "", 0, 8},
-		&testMsg{MsgTypeRetryRes, "abcd", "", 6, 8},
-		&testMsg{MsgTypeNotification, "", "hello", 0, 9},
-		&testMsg{MsgTypeProtocolError, "", "", 0, int(ProtocolErrorInvalidMsg)},
+		{MsgTypeSingleReq, "abcd", "echo", 0, 0},
+		{MsgTypeSingleReq, "zzzz", "lolcats", 0, 3},
+		{MsgTypeStreamReq, "abcd", "echo", 0, 4},
+		{MsgTypeStreamReqPart, "abcd", "", 0, 5},
+		{MsgTypeSingleRes, "abcd", "", 0, 6},
+		{MsgTypeStreamRes, "abcd", "", 0, 7},
+		{MsgTypeErrorRes, "abcd", "", 0, 8},
+		{MsgTypeRetryRes, "abcd", "", 6, 8},
+		{MsgTypeNotification, "", "hello", 0, 9},
+		{MsgTypeProtocolError, "", "", 0, int(ProtocolErrorInvalidMsg)},
 	}
 
 	// Serially (read, write, read, write, ...)

@@ -68,7 +68,7 @@ func onAccept(s *gotalk.Sock) {
 func broadcast(name string, in interface{}) {
 	socksmu.RLock()
 	defer socksmu.RUnlock()
-	for s, _ := range socks {
+	for s := range socks {
 		s.Notify(name, in)
 	}
 }
