@@ -1,3 +1,4 @@
+// demonstrates how to use gotalk over encrypted connections (TLS)
 package main
 
 import "os"

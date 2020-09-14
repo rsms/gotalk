@@ -1,3 +1,4 @@
+// A minimal gotalk web app
 package main
 
 import (

@@ -1,3 +1,4 @@
+// Multi-room chat app implemented in gotalk
 package main
 
 import (

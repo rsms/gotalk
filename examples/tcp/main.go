@@ -1,3 +1,4 @@
+// Demonstrates how to use gotalk over direct TCP connections
 package main
 
 // Describes the request parameter and operation result types for our "greet" operation

@@ -1,3 +1,4 @@
+// Demonstrates read timeout (or "idle" timeout)
 package main
 
 func main() {

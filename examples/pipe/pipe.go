@@ -1,4 +1,4 @@
-// A simple example of two connected sockets communicating with eachother
+// A simple example demonstrating the use of gotalk.Pipe()
 package main
 
 import (
