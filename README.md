@@ -4,11 +4,12 @@
 
 Gotalk...
 
-- is an efficient and easily debuggable [generic data encoding protocol](#protocol-and-wire-format)
+- is an efficient, easily debuggable [multiplexing data transfer protocol](#protocol-and-wire-format)
 - is transport agnostic: works on any byte stream
 - offers a high-level, easy-to-get-started API for WebSockets
-- includes a built-in JavaScript library (no separate files)
-- Go API is small and focused
+- enables arbitrary number of requests & responses over a single persistent connection
+- includes a small built-in [JavaScript library](/js/)
+- provides a small and focused [Go API](https://godoc.org/github.com/rsms/gotalk)
 
 > [Go API Documentation on godoc.org →](https://godoc.org/github.com/rsms/gotalk)
 
