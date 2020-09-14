@@ -14,6 +14,9 @@ test:
 	@echo "All tests OK"
 
 
+fmt:
+	find -E . -type f -name '*.go' -not -regex '\./(_local|js|vendor)/.*' | xargs gofmt -w
+
 # release prepares the project for a new release:
 #
 #   1. Compare existing git tags with the value in version.go to ensure
@@ -39,6 +42,16 @@ release:
 		echo "Missing '## v${VERSION}' in CHANGELOG.md" >&2; \
 		exit 1; \
 	fi
+	@# make sure git status is clean
+	@if [[ -n $(git status --ignore-submodules=dirty --porcelain 2> /dev/null | tail -n1) ]]; then \
+    echo "git status is not clean" ; \
+    git status --ignore-submodules=dirty ; \
+  fi
+	@# run code formatter and check if it made changes
+	$(MAKE) fmt
+	@if [[ -n $(git status --ignore-submodules=dirty --porcelain 2> /dev/null | tail -n1) ]]; then \
+    echo "" ; \
+  fi
 	go mod tidy
 	$(MAKE) test
 	@echo "Finally, run the following to publish v${VERSION}:"
