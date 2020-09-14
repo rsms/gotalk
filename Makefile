@@ -29,28 +29,26 @@ fmt:
 #   4. Print commands for publishing
 #
 release:
-	@if (git rev-list v${VERSION}.. 2>/dev/null); then \
-		echo "--------------------------------------------------" >&2; \
+	@if (git rev-list v${VERSION}.. >/dev/null 2>&1); then \
 		echo "git tag v${VERSION} already exists:" >&2; \
-		git log v1.0.0 -n 1 | cat 1>&2; \
+		git log "v${VERSION}" -n 1 --format="%H%d%n%ad %an%n%s" | cat 1>&2; \
 		echo "--------------------------------------------------" >&2; \
 		echo "Did you forget to update version.go?" >&2; \
 		echo "--------------------------------------------------" >&2; \
 		exit 1; \
 	fi
-	@if ! grep "## v${VERSION}" CHANGELOG.md; then \
-		echo "Missing '## v${VERSION}' in CHANGELOG.md" >&2; \
-		exit 1; \
-	fi
 	@# make sure git status is clean
-	@if [[ -n $(git status --ignore-submodules=dirty --porcelain 2> /dev/null | tail -n1) ]]; then \
-    echo "git status is not clean" ; \
-    git status --ignore-submodules=dirty ; \
+	@if [[ -n $$(git status --ignore-submodules=dirty --porcelain | grep -v '?? ') ]]; then \
+    echo "uncommitted changes:" >&2 ; \
+    git status --ignore-submodules=dirty -s | grep -v '?? ' >&2; \
+    exit 1; \
   fi
 	@# run code formatter and check if it made changes
 	$(MAKE) fmt
-	@if [[ -n $(git status --ignore-submodules=dirty --porcelain 2> /dev/null | tail -n1) ]]; then \
-    echo "" ; \
+	@if [[ -n $$(git status --ignore-submodules=dirty --porcelain | grep -v '?? ') ]]; then \
+    echo "gofmt altered some files:" >&2 ; \
+    git status --ignore-submodules=dirty -s | grep -v '?? ' >&2; \
+    exit 1; \
   fi
 	go mod tidy
 	$(MAKE) test
@@ -63,6 +61,6 @@ release:
 dist: release
 
 clean:
-	rm -f bin/*
+	@true
 
-.PHONY: test clean release dist
+.PHONY: test clean release dist fmt
