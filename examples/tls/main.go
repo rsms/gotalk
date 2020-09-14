@@ -1,13 +1,14 @@
 package main
+
 import "os"
 
 // Describes the request parameter and operation result types for our "greet" operation
 type GreetIn struct {
-  Name string `json:"name"`
+	Name string `json:"name"`
 }
 
 type GreetOut struct {
-  Greeting string `json:"greeting"`
+	Greeting string `json:"greeting"`
 }
 
 func main() {
@@ -24,15 +25,15 @@ func main() {
 		}
 	}
 
-  port := "1234"
+	port := "1234"
 
-  if mode == "server" || mode == "demo" {
-	  server(port)
+	if mode == "server" || mode == "demo" {
+		server(port)
 	}
 
-  if mode == "client" || mode == "demo" {
-  	client(port)
-  } else {
-	  <- make(chan bool)  // wait forever, until ^C
+	if mode == "client" || mode == "demo" {
+		client(port)
+	} else {
+		<-make(chan bool) // wait forever, until ^C
 	}
 }

@@ -1,18 +1,18 @@
 package gotalk
 
 import (
-  "crypto/x509"
-  "fmt"
-  "io/ioutil"
+	"crypto/x509"
+	"fmt"
+	"io/ioutil"
 )
 
 var tlsCertPool *x509.CertPool
 
 func init() {
-  tlsCertPool, _ = x509.SystemCertPool()
-  if tlsCertPool == nil {
-    tlsCertPool = x509.NewCertPool()
-  }
+	tlsCertPool, _ = x509.SystemCertPool()
+	if tlsCertPool == nil {
+		tlsCertPool = x509.NewCertPool()
+	}
 }
 
 // TLSCertPool returns the root CA pool.
@@ -21,7 +21,7 @@ func init() {
 // All gotalk TLS functions that creates tls.Config uses this.
 //
 func TLSCertPool() *x509.CertPool {
-  return tlsCertPool
+	return tlsCertPool
 }
 
 // TLSAddRootCerts is a convenience for adding root (CA) certificates from
@@ -32,7 +32,7 @@ func TLSAddRootCerts(certFile string) error {
 	if err != nil {
 		return err
 	}
-  if !tlsCertPool.AppendCertsFromPEM(buf) {
+	if !tlsCertPool.AppendCertsFromPEM(buf) {
 		return fmt.Errorf("failed to load X.509 certificate file %q", certFile)
 	}
 	return nil
