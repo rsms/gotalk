@@ -55,7 +55,7 @@ release:
 	@echo "Finally, run the following to publish v${VERSION}:"
 	@echo "  git tag v${VERSION}"
 	@echo "  git push origin v${VERSION} master"
-	@echo "  open https://github.com/rsms/gotalk/releases/tag/v${VERSION}"
+	@echo "  open https://github.com/rsms/gotalk/releases/new?tag=v${VERSION}&title=v${VERSION}"
 
 
 dist: release
