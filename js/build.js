@@ -37,9 +37,10 @@ async function postProcess(config, diagnostics) {
   // go source with embedded js
   let goSource = `
   package gotalk
+
   const JSLibSHA1Base64 = "${sha1(jsbuf1, 'base64')}"
   const JSLibString = ${bytesToGoString(jsbuf1)}
-  `.trim().replace(/\n\s+/g,"\n") + "\n"
+  `.trim().replace(/\n +/g,"\n") + "\n"
 
   await Promise.all([
     file.write(config.outfile, jsbuf2),
