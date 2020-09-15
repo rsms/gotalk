@@ -59,7 +59,9 @@ release:
 	@echo "Finally, run the following to publish v${VERSION}:"
 	@echo "  git tag v${VERSION}"
 	@echo "  git push origin v${VERSION} master"
+	@echo "  curl --silent https://pkg.go.dev/fetch/github.com/rsms/gotalk@v${VERSION} > /dev/null"
 	@echo "  open https://github.com/rsms/gotalk/releases/new?tag=v${VERSION}&title=v${VERSION}"
+	@echo ""
 
 
 
