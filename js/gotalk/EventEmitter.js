@@ -1,6 +1,5 @@
 
-function EventEmitter() {}
-module.exports = EventEmitter;
+export function EventEmitter() {}
 
 EventEmitter.prototype.addListener = function (type, listener) {
   if (typeof listener !== 'function') throw TypeError('listener must be a function');
@@ -67,9 +66,6 @@ EventEmitter.prototype.emit = function (type) {
   }
   var i = 0, L = listeners.length, args = Array.prototype.slice.call(arguments,1);
   for (; i !== L; ++i) {
-    if (!listeners[i]) {
-      console.log('e', type, i, args);
-    }
     listeners[i].apply(this, args);
   }
   return true;

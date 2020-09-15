@@ -1,8 +1,24 @@
-"use strict";
 // Stay connected by automatically reconnecting w/ exponential back-off.
+import { document, global } from "./env"
+import { ErrorTimeout } from "./protocol"
 
-var netAccess = require('./netaccess');
-var protocol = require('./protocol');
+var netAccess = {available:false, onLine:true}
+
+if (global.addEventListener) {
+  netAccess.available = true
+  netAccess.onLine = typeof navigator != 'undefined' ? navigator.onLine : true;
+
+  global.addEventListener("offline", function (ev) {
+    netAccess.onLine = false
+    netAccess.emit('offline')
+  })
+
+  global.addEventListener("online", function (ev) {
+    netAccess.onLine = true
+    netAccess.emit('online')
+  })
+}
+
 
 // `s` must conform to interface { connect(addr string, cb function(Error)) }
 // Returns an object {
@@ -11,15 +27,15 @@ var protocol = require('./protocol');
 //   enable()          // enables staying connected
 //   disable()         // disables trying to stay connected
 // }
-var keepalive = function(s, addr, minReconnectDelay, maxReconnectDelay) {
+export function keepalive(s, addr, minReconnectDelay, maxReconnectDelay) {
   if (!minReconnectDelay) {
-    minReconnectDelay = 500;
+    minReconnectDelay = 500
   } else if (minReconnectDelay < 100) {
-    minReconnectDelay = 100;
+    minReconnectDelay = 100
   }
 
   if (!maxReconnectDelay || maxReconnectDelay < minReconnectDelay) {
-    maxReconnectDelay = 5000;
+    maxReconnectDelay = 5000
   }
 
   var ctx, open, retry, delay = 0, openTimer, opentime;
@@ -65,8 +81,8 @@ var keepalive = function(s, addr, minReconnectDelay, maxReconnectDelay) {
     if (!ctx.enabled) {
       return;
     }
-    if (netAccess.available && !netAccess.onLine && 
-        !(typeof document !== 'undefined' &&
+    if (netAccess.available && !netAccess.onLine &&
+        !(document &&
           document.location &&
           document.location.hostname !== 'localhost' &&
           document.location.hostname !== '127.0.0.1' &&
@@ -100,5 +116,3 @@ var keepalive = function(s, addr, minReconnectDelay, maxReconnectDelay) {
 
   return ctx;
 };
-
-module.exports = keepalive;

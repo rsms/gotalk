@@ -1,4 +1,3 @@
-"use strict";
 //
 // decode(Buf) -> String
 // encode(String) -> Buf
@@ -6,12 +5,11 @@
 //
 
 // Returns the number of bytes needed to represent string `s` as UTF8
-function sizeOf(s) {
+export function sizeOf(s) {
   var z = 0, i = 0, c;
   for (; c = s.charCodeAt(i++); z += (c >> 11 ? 3 : c >> 7 ? 2 : 1) );
   return z;
 }
-exports.sizeOf = sizeOf;
 
 function mask8(c) {
   return 0xff & c;

@@ -1,9 +1,8 @@
-"use strict";
-var Buf = require('./buf');
-var utf8 = require('./utf8');
+import { Buf } from "./buf"
+import * as utf8 from "./utf8"
 
 // Version of this protocol
-exports.Version = 1;
+exports.Version = 1
 
 // Message types
 var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     0x72 // 'r'.charCodeAt(0)
@@ -16,16 +15,15 @@ var MsgTypeSingleReq     = exports.MsgTypeSingleReq =     0x72 // 'r'.charCodeAt
   , MsgTypeNotification  = exports.MsgTypeNotification =  0x6E // 'n'.charCodeAt(0)
   , MsgTypeHeartbeat     = exports.MsgTypeHeartbeat =     0x68 // 'h'.charCodeAt(0)
   , MsgTypeProtocolError = exports.MsgTypeProtocolError = 0x66 // 'f'.charCodeAt(0)
-;
 
 // ProtocolError codes
 exports.ErrorAbnormal    = 0
-exports.ErrorUnsupported = 1;
-exports.ErrorInvalidMsg  = 2;
-exports.ErrorTimeout     = 3;
+exports.ErrorUnsupported = 1
+exports.ErrorInvalidMsg  = 2
+exports.ErrorTimeout     = 3
 
 // Maximum value of a heartbeat's "load"
-exports.HeartbeatMsgMaxLoad = 0xffff;
+exports.HeartbeatMsgMaxLoad = 0xffff
 
 // ==============================================================================================
 // Binary (byte) protocol

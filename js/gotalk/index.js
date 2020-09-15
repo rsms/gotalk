@@ -1,28 +1,98 @@
-"use strict";
-var protocol = require('./protocol'),
-      txt = protocol.text,
-      bin = protocol.binary;
-var Buf = require('./buf');
-var utf8 = require('./utf8');
-var EventEmitter = require('./EventEmitter');
-var keepalive = require('./keepalive');
-var global = require('./env').global
+import { Buf } from "./buf"
+import { EventEmitter } from "./EventEmitter"
+import { keepalive } from "./keepalive"
+import { console, document } from "./env"
+import * as protocol from "./protocol"
+import * as utf8 from "./utf8"
 
 var gotalk = exports;
 export default exports
 
-gotalk.protocol = protocol;
-gotalk.Buf = Buf;
+var txt = protocol.text
+var bin = protocol.binary
+
+gotalk.protocol = protocol
+gotalk.Buf = Buf
+gotalk.developmentMode = false
+gotalk.defaultResponderAddress = ""
+
+// this is set by init() to the default (inferred) value of gotalk.defaultResponderAddress
+// and used to show warning messages.
+var builtinDefaultResponderAddress = ""
+
+// scriptUrl is the gotalk.js script URL, updated by init()
+var scriptUrl = { wsproto: "", proto: "", host: "", path: "" }
+
+function noop(){}
+
+// run at script initialization (end of this file)
+function init() {
+  document && initWebDocumentDeps()
+
+  gotalk.developmentMode = hostnameIsLocal(scriptUrl.host)
+}
+
+function initWebDocumentDeps() {
+  // init stuff that depends on HTML "document"
+  var s = document.currentScript.src
+  if (!s) {
+    return
+  }
+
+  var a = s.indexOf('://') + 3
+  if (a == 2) {
+    return
+  }
+  scriptUrl.proto = s.substr(0, a - 2) // e.g. "http:"
+  var b = s.indexOf('/', a)
+  if (b == -1) {
+    return
+  }
+  scriptUrl.wsproto = scriptUrl.proto == "https:" ? "wss://" : "ws://"
+
+  scriptUrl.host = s.substring(a, b)  // e.g. localhost:1234
+  s = s.substr(b)
+  a = s.lastIndexOf('?')
+  if (a != -1) {
+    // trim away query string
+    s = s.substr(0, a)
+  }
+
+  scriptUrl.path = s.substring(s.indexOf('/'), s.lastIndexOf('/') + 1)
+  gotalk.defaultResponderAddress = scriptUrl.wsproto + scriptUrl.host + scriptUrl.path
+  builtinDefaultResponderAddress = gotalk.defaultResponderAddress
+}
+
+function hostnameIsLocal(hostname) {
+  var h = hostname
+  var i = h.lastIndexOf(":")
+  if (i != -1) {
+    // strip port
+    h = h.substr(0, i)
+  }
+  i = h.lastIndexOf(".")
+  return (
+    i == -1 ? h == "localhost" : // note: no ipv6 on purpose
+       h == "127.0.0.1"
+    || h.substr(i) == ".local"  // e.g. "robins-mac.local"
+  )
+}
+
+function logDevWarning(/*...*/) {
+  gotalk.developmentMode && console.warn.apply(console, Array.prototype.slice.call(arguments))
+}
 
 function decodeJSON(v) {
+  if (!v || v.length == 0) {
+    return null
+  }
   if (typeof v != "string") {
     v = utf8.decode(v)
   }
   try {
     return JSON.parse(v);
   } catch (err) {
-    if (typeof console != "undefined" && console.warn)
-    console.warn("[gotalk] ignoring invalid json", v)
+    logDevWarning("[gotalk] ignoring invalid json", v)
   }
 }
 
@@ -94,6 +164,12 @@ var websocketCloseStatus = {
 };
 
 
+function wsCloseStatusMsg(code) {
+  var name = websocketCloseStatus[code]
+  return '#'+code + (name ? " (" + name + ")" : "")
+}
+
+
 // Adopt a web socket, which should be in an OPEN state
 Sock.prototype.adoptWebSocket = function(ws) {
   var s = this;
@@ -105,7 +181,7 @@ Sock.prototype.adoptWebSocket = function(ws) {
   ws.onclose = function(ev) {
     var err = ws._gotalkCloseError;
     if (!err && ev.code !== 1000) {
-      err = new Error('websocket closed: ' + (websocketCloseStatus[ev.code] || '#'+ev.code));
+      err = new Error('websocket closed: ' + wsCloseStatusMsg(ev.code));
     }
     resetSock(s, err);
     s.emit('close', err);
@@ -307,8 +383,8 @@ msgHandlers[protocol.MsgTypeSingleReq] = function (msg, payload) {
     try {
       handler(payload, result, msg.name);
     } catch (err) {
-      if (typeof console !== 'undefined') { console.error(err.stack || err); }
-      result.error('internal error');
+      logDevWarning("[gotalk] handler error:", err.stack || (""+err))
+      result.error('internal error')
     }
   }
 };
@@ -570,13 +646,27 @@ Handlers.prototype.findNotificationHandler = function(name) {
 
 // ===============================================================================================
 
+
+var reportedOpenError = false
+
 function openWebSocket(s, addr, callback) {
   var ws;
   try {
     ws = new WebSocket(addr);
     ws.binaryType = 'arraybuffer';
     ws.onclose = function (ev) {
-      var err = new Error('connection failed');
+      if (gotalk.developmentMode &&
+          !reportedOpenError &&
+          builtinDefaultResponderAddress == gotalk.defaultResponderAddress
+      ) {
+        reportedOpenError = true
+        logDevWarning(
+          'gotalk connection failed with code ' + wsCloseStatusMsg(ev.code) + '.' +
+          ' If you are serving gotalk.js yourself,' +
+          ' remember to set gotalk.defaultResponderAddress to the gotalk websocket endpoint.'
+        )
+      }
+      var err = new Error('connection failed: ' + wsCloseStatusMsg(ev.code));
       if (callback) callback(err);
     };
     ws.onopen = function(ev) {
@@ -592,40 +682,48 @@ function openWebSocket(s, addr, callback) {
       ws._bufferedMessages.push(ev.data);
     };
   } catch (err) {
+    logDevWarning("[gotalk] WebSocket init error:", err.stack || (""+err))
     if (callback) callback(err);
     s.emit('close', err);
   }
 }
 
 
-// derive defaultResponderAddress from document.currentScript.src
-gotalk.defaultResponderAddress = (function() {
-  if (typeof document == 'undefined') {
-    return
+function anyProtoToWsProto(proto) {
+  return proto == "https:" ? "wss://" : "ws://"
+}
+
+
+function absWsAddr(addr) {
+  if (!addr) {
+    addr = gotalk.defaultResponderAddress
   }
-  var s = document.currentScript.src
-  if (!s) {
-    return
+
+  var start = addr.substr(0,4)
+  if (start != "ws:/" && start != "wss:") {
+    // addr does not specify protocol
+    if (scriptUrl.proto) {
+      if (addr[0] == "/") {
+        if (addr[1] == "/") {
+          // addr specifices "//host/path"
+          addr = scriptUrl.wsproto + addr
+        } else {
+          // addr specifices absolute "/path"
+          addr = scriptUrl.wsproto + scriptUrl.host + addr
+        }
+      } else {
+        // addr specifices relative "path"
+        addr = scriptUrl.wsproto + scriptUrl.host + "/" + addr
+      }
+    }
   }
-  var a = s.indexOf('://') + 3
-  if (a == 2) {
-    return
+
+  if (!addr) {
+    throw new Error('address not specified')
   }
-  var proto = s.substr(0, a)
-  var b = s.indexOf('/', a)
-  if (b == -1) {
-    return
-  }
-  var host = s.substring(a, b)
-  s = s.substr(b)
-  a = s.lastIndexOf('?')
-  if (a != -1) {
-    // trim away query string
-    s = s.substr(0, a)
-  }
-  var path = s.substring(s.indexOf('/'), s.lastIndexOf('/') + 1)
-  return (proto == "https:" ? "wss://" : "ws://") + host + path
-})() || ""
+
+  return addr
+}
 
 
 Sock.prototype.open = function(addr, callback) {
@@ -634,15 +732,7 @@ Sock.prototype.open = function(addr, callback) {
     callback = addr;
     addr = null;
   }
-
-  if (!addr) {
-    if (!gotalk.defaultResponderAddress) {
-      throw new Error('address not specified (empty gotalk.defaultResponderAddress)')
-    }
-    addr = gotalk.defaultResponderAddress;
-  }
-
-  openWebSocket(s, addr, callback);
+  openWebSocket(s, absWsAddr(addr), callback);
   return s;
 };
 
@@ -698,3 +788,6 @@ gotalk.handleBufferNotification = function (name, handler) {
 gotalk.handleNotification = function (name, handler) {
   return gotalk.defaultHandlers.handleNotification(name, handler);
 };
+
+
+init()

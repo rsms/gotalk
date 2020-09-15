@@ -35,6 +35,10 @@ var defaultHandlers :Handlers<Uint8Array>|Handlers<string>
 // Default address to connect to. This is falsey if the JS library isn't served by gotalk.
 var defaultResponderAddress :string
 
+// If set to true, some helpful messages may be logged to the console.
+// The initial value is true when gotalk is served in a web browser over localhost, else its false.
+var developmentMode :boolean
+
 // Sock creates a socket
 function Sock<T>(handlers :Handlers<T>, proto? :Protocol<T>) :Sock<T>
 

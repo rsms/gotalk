@@ -1,21 +1,19 @@
-"use strict";
-var Buf;
+import * as utf8 from './utf8'
 
-if (typeof Uint8Array !== 'undefined') {
+export var Buf = (function() {
+  if (typeof Uint8Array == 'undefined') {
+    return null
+  }
 
-var utf8 = require('./utf8');
+  // Buf(Buf) -> Buf
+  // Buf(size int) -> Buf
+  // Buf(ArrayBuffer) -> Buf
+  return function Buf(v) {
+    return v instanceof Uint8Array ? v :
+      new Uint8Array(
+        v instanceof ArrayBuffer ? v :
+        new ArrayBuffer(v)
+      );
+  };
 
-// Buf(Buf) -> Buf
-// Buf(size int) -> Buf
-// Buf(ArrayBuffer) -> Buf
-Buf = function Buf(v) {
-  return v instanceof Uint8Array ? v :
-    new Uint8Array(
-      v instanceof ArrayBuffer ? v :
-      new ArrayBuffer(v)
-    );
-};
-
-}
-
-module.exports = Buf;
+})()
