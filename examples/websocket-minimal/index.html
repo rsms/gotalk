@@ -1,26 +1,24 @@
 <!DOCTYPE HTML>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <script type="text/javascript" src="/gotalk/gotalk.js"></script>
-  </head>
-  <body>
-    <script>
-
-var s = gotalk.connection()
-  .on('open', function () {
-    s.request('echo', 'hello', function (err, result) {
-      if (err) return console.error(err.stack || err);
-      console.log('echo:', result);
-    });
-  })
-  .on('close', function (err) {
-    console.log('socket closed', err);
-  })
-  .on('notification', function (name, value) {
-    console.log('received notification "'+name+'":', value);
-  });
-
-    </script>
-  </body>
+	<head>
+		<meta charset="utf-8">
+		<!-- load the built-in JS library -->
+		<script type="text/javascript" src="/gotalk/gotalk.js"></script>
+	</head>
+	<body style="white-space:pre;font-family:monospace"><button>Send request</button>
+	<script>
+	// create a connection (automatically reconnects as needed)
+	let c = gotalk.connection()
+		.on('open', async() => log(`connection opened\n`))
+		.on('close', reason => log(`connection closed (reason: ${reason})\n`))
+	// make out button send a request
+	document.body.firstChild.onclick = async () => {
+		let res = await c.requestp('test/message', 'hello ' + new Date())
+		log(`reply: ${JSON.stringify(res, null, 2)}\n`)
+	}
+	function log(message) {
+		document.body.appendChild(document.createTextNode(message))
+	}
+	</script>
+	</body>
 </html>
