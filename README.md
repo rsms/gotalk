@@ -9,9 +9,9 @@ Gotalk...
 - offers a high-level, easy-to-get-started API for WebSockets
 - enables arbitrary number of requests & responses over a single persistent connection
 - includes a small built-in [JavaScript library](/js/)
-- provides a small and focused [Go API](https://godoc.org/github.com/rsms/gotalk)
+- provides a small and focused [Go API](https://pkg.go.dev/github.com/rsms/gotalk)
 
-> [Go API Documentation on godoc.org →](https://godoc.org/github.com/rsms/gotalk)
+> [Go API Documentation on godoc.org →](https://pkg.go.dev/github.com/rsms/gotalk)
 
 
 ## Usage
