@@ -1,6 +1,7 @@
-/_local
 *.gz
 *.zip
 *.sublime-*
 * copy
 .DS_Store
+/_local
+/.cache
