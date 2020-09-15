@@ -17,6 +17,10 @@ test:
 fmt:
 	find -E . -type f -name '*.go' -not -regex '\./(_local|js|vendor)/.*' | xargs gofmt -w
 
+doc:
+	@echo "open http://localhost:6060/pkg/github.com/rsms/gotalk/"
+	godoc -http=localhost:6060
+
 # release prepares the project for a new release:
 #
 #   1. Compare existing git tags with the value in version.go to ensure
@@ -58,9 +62,10 @@ release:
 	@echo "  open https://github.com/rsms/gotalk/releases/new?tag=v${VERSION}&title=v${VERSION}"
 
 
+
 dist: release
 
 clean:
 	@true
 
-.PHONY: test clean release dist fmt
+.PHONY: test clean release dist fmt doc
