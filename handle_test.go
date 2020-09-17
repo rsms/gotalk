@@ -25,7 +25,7 @@ func checkReqHandler(t *testing.T, s *Sock, h *Handlers, name, input, expectedOu
 }
 
 func TestRequestFuncHandlers(t *testing.T) {
-	h := NewHandlers()
+	h := &Handlers{}
 
 	// Handlers.Handle panic() when the signature is incorrect, so treat panic as test failure
 	defer recoverAsFail(t)
@@ -116,7 +116,7 @@ func checkNotHandler(t *testing.T, s *Sock, h *Handlers, name, input string) {
 }
 
 func TestNotificationFuncHandlers(t *testing.T) {
-	h := NewHandlers()
+	h := &Handlers{}
 	defer recoverAsFail(t)
 	invocationCount := 0
 

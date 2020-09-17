@@ -8,6 +8,8 @@ import (
 	"sync"
 )
 
+// The Handlers struct contains request and notifications handlers.
+// Create a new set of handlers by simply creating a zero struct: `&Handlers{}`
 type Handlers struct {
 	bufReqHandlersMu      sync.RWMutex
 	bufReqHandlers        bufReqHandlerMap
@@ -22,11 +24,10 @@ type Handlers struct {
 	noteFallbackHandler BufferNoteHandler
 }
 
+// NewHandlers creates a new Handlers struct.
+// DEPRECATED: use `&Handlers{}` instead
 func NewHandlers() *Handlers {
-	return &Handlers{
-		bufReqHandlers:    make(bufReqHandlerMap),
-		streamReqHandlers: make(streamReqHandlerMap),
-		noteHandlers:      make(noteHandlerMap)}
+	return &Handlers{}
 }
 
 // If a handler panics, it's assumed that the effect of the panic was isolated to the active
@@ -37,7 +38,8 @@ type BufferNoteHandler func(s *Sock, name string, payload []byte)
 // EOS when <-rch==nil
 type StreamReqHandler func(s *Sock, name string, rch chan []byte, out io.WriteCloser) error
 
-var DefaultHandlers = NewHandlers()
+// Default handlers, manipulated by the package-level handle functions like HandleBufferRequest
+var DefaultHandlers = &Handlers{}
 
 // Handle operation with automatic JSON encoding of values.
 //
@@ -109,6 +111,9 @@ func (h *Handlers) HandleBufferRequest(op string, fn BufferReqHandler) {
 	if len(op) == 0 {
 		h.bufReqFallbackHandler = fn
 	} else {
+		if h.bufReqHandlers == nil {
+			h.bufReqHandlers = make(bufReqHandlerMap)
+		}
 		h.bufReqHandlers[op] = fn
 	}
 }
@@ -120,6 +125,9 @@ func (h *Handlers) HandleStreamRequest(op string, fn StreamReqHandler) {
 	if len(op) == 0 {
 		h.streamReqFallbackHandler = fn
 	} else {
+		if h.streamReqHandlers == nil {
+			h.streamReqHandlers = make(streamReqHandlerMap)
+		}
 		h.streamReqHandlers[op] = fn
 	}
 }
@@ -136,6 +144,9 @@ func (h *Handlers) HandleBufferNotification(name string, fn BufferNoteHandler) {
 	if len(name) == 0 {
 		h.noteFallbackHandler = fn
 	} else {
+		if h.noteHandlers == nil {
+			h.noteHandlers = make(noteHandlerMap)
+		}
 		h.noteHandlers[name] = fn
 	}
 }
