@@ -172,16 +172,16 @@ func init() {
 	rand.Seed(time.Now().UTC().UnixNano())
 }
 
-func limitWait(min, max int) int {
-	return min + rand.Intn(max-min)
+func limitWait(min, max int) uint32 {
+	return uint32(min + rand.Intn(max-min))
 }
 
-func limitWaitStreamReq() int {
+func limitWaitStreamReq() uint32 {
 	// Time to tell requestor to wait when sending a streaming requests while limit has been reached
 	return limitWait(500, 5000)
 }
 
-func limitWaitBufferReq() int {
+func limitWaitBufferReq() uint32 {
 	// Time to tell requestor to wait when sending a buffer requests while limit has been reached
 	return limitWait(500, 5000)
 }

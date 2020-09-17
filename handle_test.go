@@ -2,17 +2,9 @@ package gotalk
 
 import (
 	"bytes"
-	"runtime/debug"
+	"io"
 	"testing"
 )
-
-func recoverAsFail(t *testing.T) {
-	if v := recover(); v != nil {
-		t.Log(v)
-		t.Log(string(debug.Stack()))
-		t.Fail()
-	}
-}
 
 func checkReqHandler(t *testing.T, s *Sock, h *Handlers, name, input, expectedOutput string) {
 	if a := h.FindBufferRequestHandler(name); a == nil {
@@ -22,6 +14,21 @@ func checkReqHandler(t *testing.T, s *Sock, h *Handlers, name, input, expectedOu
 	} else if bytes.Equal(outbuf, []byte(expectedOutput)) == false {
 		t.Errorf("handler '%s' returned '%s', expected '%s'", name, string(outbuf), expectedOutput)
 	}
+}
+
+func checkNotHandler(t *testing.T, s *Sock, h *Handlers, name, input string) {
+	if a := h.FindNotificationHandler(name); h == nil {
+		t.Errorf("handler '%s' not found", name)
+	} else {
+		a(s, name, []byte(input))
+	}
+}
+
+// end of helpers
+// ----------------------------------------------------------------------------------------
+
+func TestHandlersBasics(t *testing.T) {
+	assertNotNil(t, NewHandlers()) // legacy function
 }
 
 func TestRequestFuncHandlers(t *testing.T) {
@@ -89,6 +96,7 @@ func TestRequestFuncHandlers(t *testing.T) {
 
 	s := NewSock(h)
 
+	//                       name, input, expectedOutput
 	checkReqHandler(t, s, h, "a", "1", "2")
 	checkReqHandler(t, s, h, "b", "1", "2")
 	checkReqHandler(t, s, h, "c", "1", "2")
@@ -104,14 +112,6 @@ func TestRequestFuncHandlers(t *testing.T) {
 
 	if invocationCount != 12 {
 		t.Error("not all handlers were invoked")
-	}
-}
-
-func checkNotHandler(t *testing.T, s *Sock, h *Handlers, name, input string) {
-	if a := h.FindNotificationHandler(name); h == nil {
-		t.Errorf("handler '%s' not found", name)
-	} else {
-		a(s, name, []byte(input))
 	}
 }
 
@@ -166,4 +166,18 @@ func TestNotificationFuncHandlers(t *testing.T) {
 	if invocationCount != 5 {
 		t.Error("not all handlers were invoked")
 	}
+}
+
+func TestPkgLevelHandlers(t *testing.T) {
+	// package-level handler functions are wrappers: F(...)=>DefaultHandlers.F(...)
+	Handle("a", func() error { return nil })
+	HandleBufferRequest("a", func(s *Sock, op string, payload []byte) ([]byte, error) {
+		return nil, nil
+	})
+	HandleStreamRequest("a", func(s *Sock, name string, rch chan []byte, out io.WriteCloser) error {
+		out.Close()
+		return nil
+	})
+	HandleNotification("a", func() {})
+	HandleBufferNotification("a", func(s *Sock, name string, payload []byte) {})
 }

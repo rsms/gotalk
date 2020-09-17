@@ -227,13 +227,13 @@ func (s *Sock) deallocReqChan(id string) {
 
 var errNotConnected = errors.New("not connected")
 
-func (s *Sock) writeMsg(t MsgType, id, op string, wait int, buf []byte) error {
+func (s *Sock) writeMsg(t MsgType, id, op string, wait uint32, buf []byte) error {
 	if s.conn == nil {
 		return errNotConnected
 	}
 	s.wmu.Lock()
 	defer s.wmu.Unlock()
-	if _, err := s.conn.Write(MakeMsg(t, id, op, wait, len(buf))); err != nil {
+	if _, err := s.conn.Write(MakeMsg(t, id, op, wait, uint32(len(buf)))); err != nil {
 		return err
 	}
 	if len(buf) != 0 {
@@ -243,13 +243,13 @@ func (s *Sock) writeMsg(t MsgType, id, op string, wait int, buf []byte) error {
 	return nil
 }
 
-func (s *Sock) writeMsgString(t MsgType, id, op string, wait int, str string) error {
+func (s *Sock) writeMsgString(t MsgType, id, op string, wait uint32, str string) error {
 	if s.conn == nil {
 		return errNotConnected
 	}
 	s.wmu.Lock()
 	defer s.wmu.Unlock()
-	if _, err := s.conn.Write(MakeMsg(t, id, op, wait, len(str))); err != nil {
+	if _, err := s.conn.Write(MakeMsg(t, id, op, wait, uint32(len(str)))); err != nil {
 		return err
 	}
 	if len(str) != 0 {
@@ -351,7 +351,7 @@ func (s *Sock) respondError(readz int, id, msg string) error {
 	return s.writeMsg(MsgTypeErrorRes, id, "", 0, []byte(msg))
 }
 
-func (s *Sock) respondRetry(readz int, id string, wait int, msg string) error {
+func (s *Sock) respondRetry(readz int, id string, wait uint32, msg string) error {
 	if err := s.readDiscard(readz); err != nil {
 		return err
 	}
@@ -604,6 +604,8 @@ func (s *Sock) sendHeartbeats(stopChan chan bool) {
 	// Sleep for a very short amount of time to allow modification of HeartbeatInterval after
 	// e.g. a call to Connect
 	time.Sleep(time.Millisecond)
+	var bufa [16]byte
+	buf := bufa[:0]
 	for {
 		// load is just the number of current goroutines. There has to be a more interesting "load"
 		// number to convey...
@@ -613,7 +615,7 @@ func (s *Sock) sendHeartbeats(stopChan chan bool) {
 		} else if g < 0 {
 			g = 0
 		}
-		if err := s.SendHeartbeat(g); err != nil {
+		if err := s.SendHeartbeat(g, buf); err != nil {
 			return
 		}
 		select {
@@ -625,13 +627,13 @@ func (s *Sock) sendHeartbeats(stopChan chan bool) {
 	}
 }
 
-func (s *Sock) SendHeartbeat(load float32) error {
+func (s *Sock) SendHeartbeat(load float32, buf []byte) error {
 	s.wmu.Lock()
 	defer s.wmu.Unlock()
 	if s.conn == nil {
 		return errors.New("not connected")
 	}
-	msg := MakeHeartbeatMsg(uint16(load * float32(HeartbeatMsgMaxLoad)))
+	msg := MakeHeartbeatMsg(uint16(load*float32(HeartbeatMsgMaxLoad)), buf)
 	_, err := s.conn.Write(msg)
 	return err
 }
@@ -666,6 +668,7 @@ func (s *Sock) Read(limits Limits) error {
 	}
 
 	var err error
+	readbuf := make([]byte, 128)
 
 readloop:
 	for s.conn != nil {
@@ -696,7 +699,7 @@ readloop:
 		}
 
 		// Read next message
-		t, id, name, wait, size, err1 := ReadMsg(s.conn)
+		t, id, name, wait, size, err1 := ReadMsg(s.conn, readbuf)
 		err = err1
 		if err == nil {
 			// fmt.Printf("Read: msg: t=%c  id=%q  name=%q  size=%v\n", byte(t), id, name, size)
@@ -744,6 +747,7 @@ readloop:
 			} else {
 				s.CloseError(ProtocolErrorInvalidMsg)
 			}
+			break readloop
 		}
 	}
 
@@ -766,10 +770,13 @@ func (s *Sock) Addr() string {
 
 // Close this socket because of a protocol error
 func (s *Sock) CloseError(code int) error {
+	if code < 0 {
+		code = ProtocolErrorAbnormal
+	}
 	if s.conn != nil {
 		s.closeCode = code
 		s.wmu.Lock()
-		s.conn.Write(MakeMsg(MsgTypeProtocolError, "", "", 0, code))
+		s.conn.Write(MakeMsg(MsgTypeProtocolError, "", "", 0, uint32(code)))
 		s.wmu.Unlock()
 		return s.Close()
 	}

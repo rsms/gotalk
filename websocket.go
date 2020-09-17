@@ -43,9 +43,9 @@ var (
 func init() {
 	jslibETag = "\"" + JSLibSHA1Base64 + "\""
 	jslibHeader = map[string][]string{
-		"Content-Type":  []string{"application/javascript; charset=utf-8"},
-		"Cache-Control": []string{"public,max-age=300"}, // 5min
-		"ETag":          []string{jslibETag},
+		"Content-Type":  {"application/javascript; charset=utf-8"},
+		"Cache-Control": {"public,max-age=300"}, // 5min
+		"ETag":          {jslibETag},
 	}
 	// Note on Cache-Control:
 	// max-age is the max time a browser can hold on to a copy of gotalk.js without

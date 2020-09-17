@@ -63,17 +63,18 @@ func ReadVersion(s io.Reader) (uint8, error) {
 var HeartbeatMsgMaxLoad = 0xffff
 
 // Create a slice of bytes representing a heartbeat message
-func MakeHeartbeatMsg(load uint16) []byte {
-	b := []byte{byte(MsgTypeHeartbeat), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+func MakeHeartbeatMsg(load uint16, b []byte) []byte {
+	// b := []byte{byte(MsgTypeHeartbeat), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	b[0] = byte(MsgTypeHeartbeat)
 	z := 1
 	copyFixnum(b[z:z+4], 4, uint64(load), 16)
 	z += 4
 	copyFixnum(b[z:z+8], 8, uint64(time.Now().UTC().Unix()), 16)
-	return b
+	return b[0:13]
 }
 
 // Create a slice of bytes representing a message (w/o any payload)
-func MakeMsg(t MsgType, id, name3 string, wait, size int) []byte {
+func MakeMsg(t MsgType, id, name3 string, wait, size uint32) []byte {
 	// calculate buffer size
 	bz := 9 // minimum size, fitting type and payload size
 	name3z := 0
@@ -103,9 +104,6 @@ func MakeMsg(t MsgType, id, name3 string, wait, size int) []byte {
 	}
 
 	if name3z != 0 {
-		if len(name3) == 0 {
-			panic("empty name")
-		}
 		copyFixnum(b[z:z+3], 3, uint64(name3z), 16) // name3 size e.g. "004"
 		z += 3
 		copy(b[z:], []byte(name3))
@@ -113,11 +111,7 @@ func MakeMsg(t MsgType, id, name3 string, wait, size int) []byte {
 	}
 
 	if t == MsgTypeRetryRes {
-		if wait == 0 {
-			copy(b[z:], zeroes[:8])
-		} else {
-			copyFixnum(b[z:z+8], 8, uint64(wait), 16)
-		}
+		copyFixnum(b[z:z+8], 8, uint64(wait), 16)
 		z += 8
 	}
 
@@ -132,11 +126,10 @@ func MakeMsg(t MsgType, id, name3 string, wait, size int) []byte {
 
 // Read a message from `s`
 // If t is MsgTypeHeartbeat, wait==load, size==time
-func ReadMsg(s io.Reader) (t MsgType, id, name3 string, wait, size uint32, err error) {
+func ReadMsg(s io.Reader, b []byte) (t MsgType, id, name3 string, wait, size uint32, err error) {
 	// "r0001004echo00000005"  => ('r', "0001", "echo", 0, 5, nil)
 	// "R000100000005"         => ('R', "0001", "", 0, 5, nil)
 	// "e00010000138800000014" => ('e', "0001", "", 5000, 20, nil)
-	b := make([]byte, 128)
 
 	// A message has a minimum size of 13, so read first 13 bytes
 	// e.g. "n001a00000000" = <notification> <short name> <no payload>
@@ -251,12 +244,12 @@ func copyFixnum(buf []byte, ndigits int, n uint64, base int) {
 	rShiftSlice(buf[:ndigits], ndigits-z, byte(48))
 }
 
-func makeFixnumBuf(ndigits int, n uint64, base int) []byte {
-	zb := make([]byte, ndigits)
-	z := len(strconv.AppendUint(zb[:0], n, base))
-	rShiftSlice(zb, ndigits-z, byte(48))
-	return zb
-}
+// func makeFixnumBuf(ndigits int, n uint64, base int) []byte {
+// 	zb := make([]byte, ndigits)
+// 	z := len(strconv.AppendUint(zb[:0], n, base))
+// 	rShiftSlice(zb, ndigits-z, byte(48))
+// 	return zb
+// }
 
 func rShiftSlice(b []byte, n int, padb byte) {
 	if n != 0 {

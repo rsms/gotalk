@@ -1,25 +1,49 @@
 VERSION = $(shell grep 'const Version =' version.go | cut -d '"' -f 2)
+GOCOV_FILE=.cache/coverage.out
 
-test:
-	go test
-	@
-	@echo "go build examples/*"
-	@for d in examples/*; do (cd $$d && go build) & done ; wait
-	@
-	(cd examples/tcp          && ./tcp >/dev/null)
-	(cd examples/tls          && ./tls >/dev/null)
-	(cd examples/pipe         && ./pipe >/dev/null)
-	(cd examples/limits       && ./limits >/dev/null)
-	(cd examples/read-timeout && ./read-timeout >/dev/null)
+test: gotest
+	bash examples/test.sh -silent
 	@echo "All tests OK"
 
+gotest:
+	@mkdir -p $(dir $(GOCOV_FILE))
+	go test -covermode=count "-coverprofile=$(GOCOV_FILE)"
 
 fmt:
-	find -E . -type f -name '*.go' -not -regex '\./(_local|js|vendor)/.*' | xargs gofmt -w
+	@echo gofmt -w -s
+	@find -E . -type f -name '*.go' -not -regex '\./(_local|js|vendor)/.*' | xargs gofmt -w -s
 
 doc:
 	@echo "open http://localhost:6060/pkg/github.com/rsms/gotalk/"
 	godoc -http=localhost:6060
+
+dev:
+	@mkdir -p .cache/dev
+	@(serve-http -no-log -p 8148 .cache/dev &)
+	autorun \
+		$(firstword $(MAKEFILE_LIST)) \
+		go.sum \
+		*.go \
+		-- "$(MAKE) dev1"
+
+dev1: fmt
+	@ echo "go test (see http://localhost:8148/ for code coverage)"
+	@ go test -covermode=count "-coverprofile=$(GOCOV_FILE)"
+	@ go tool cover "-html=$(GOCOV_FILE)" -o .cache/gocov.html
+	@  sed 's/.cov0 { color: rgb(192, 0, 0)/.cov0 { color: rgb(255, 100, 80)/g' .cache/gocov.html \
+	 | sed 's/font-weight: bold/font-weight: normal/g' \
+	 | sed 's/font-family:/tab-size:2;font-family: SFMono-Regular,Consolas,Liberation Mono,Menlo,/g' \
+	 | sed 's/background: black;/background: rgba(20,20,20);/g' \
+	 | python -c 'import re,sys;print(re.sub(r"\n {8}", "\n\t", sys.stdin.read()))' \
+	 | python -c 'import re,sys;print(re.sub(r"\n(\t+) {8}", "\n\\1\t", sys.stdin.read()))' \
+	 | python -c 'import re,sys;print(re.sub(r"\n(\t+) {8}", "\n\\1\t", sys.stdin.read()))' \
+	 | python -c 'import re,sys;print(re.sub(r"\n(\t+) {8}", "\n\\1\t", sys.stdin.read()))' \
+	 | python -c 'import re,sys;print(re.sub(r"\n(\t+) {8}", "\n\\1\t", sys.stdin.read()))' \
+	 | python -c 'import re,sys;print(re.sub(r"\n(\t+) {8}", "\n\\1\t", sys.stdin.read()))' \
+	 | python -c 'import re,sys;print(re.sub(r"\n(\t+) {8}", "\n\\1\t", sys.stdin.read()))' \
+	 | python -c 'import re,sys;print(re.sub(r"\n(\t+) {8}", "\n\\1\t", sys.stdin.read()))' \
+	 > .cache/gocov1.html
+	@ mv -f .cache/gocov1.html .cache/dev/index.html
 
 # release prepares the project for a new release:
 #
@@ -72,4 +96,4 @@ dist: release
 clean:
 	@true
 
-.PHONY: test clean release dist fmt doc
+.PHONY: test gotest clean release dist fmt doc dev dev1

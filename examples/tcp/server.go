@@ -8,7 +8,7 @@ import (
 func server(port string) {
 	// Use a separate set of handlers for the server, as we are running the client in the same
 	// program and thus we would have both server and client register handlers on DefaultHandlers.
-	handlers := &gotalk.Handlers{}
+	handlers := gotalk.Handlers{}
 
 	// Handle JSON-encoded request & result
 	handlers.Handle("greet", func(in GreetIn) (GreetOut, error) {
@@ -46,7 +46,7 @@ func server(port string) {
 	if err != nil {
 		panic(err)
 	}
-	s.Handlers = handlers
+	s.Handlers = &handlers
 	fmt.Printf("server: listening at %s\n", s.Addr())
 	go s.Accept()
 }
