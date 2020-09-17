@@ -605,7 +605,7 @@ func (s *Sock) sendHeartbeats(stopChan chan bool) {
 	// e.g. a call to Connect
 	time.Sleep(time.Millisecond)
 	var bufa [16]byte
-	buf := bufa[:0]
+	buf := bufa[:]
 	for {
 		// load is just the number of current goroutines. There has to be a more interesting "load"
 		// number to convey...

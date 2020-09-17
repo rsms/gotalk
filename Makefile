@@ -1,13 +1,10 @@
 VERSION = $(shell grep 'const Version =' version.go | cut -d '"' -f 2)
 GOCOV_FILE=.cache/coverage.out
 
-test: gotest
+test:
+	go test
 	bash examples/test.sh -silent
 	@echo "All tests OK"
-
-gotest:
-	@mkdir -p $(dir $(GOCOV_FILE))
-	go test -covermode=count "-coverprofile=$(GOCOV_FILE)"
 
 fmt:
 	@echo gofmt -w -s
@@ -96,4 +93,4 @@ dist: release
 clean:
 	@true
 
-.PHONY: test gotest clean release dist fmt doc dev dev1
+.PHONY: test clean release dist fmt doc dev dev1
