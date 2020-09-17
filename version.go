@@ -1,4 +1,4 @@
 package gotalk
 
 // Current version of gotalk
-const Version = "1.1.3"
+const Version = "1.1.4"
