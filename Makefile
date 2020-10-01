@@ -89,7 +89,9 @@ release:
 
 
 
-dist: release
+dist:
+	@echo "Did you mean 'make release'?" >&2
+	@exit 1
 
 clean:
 	@true
