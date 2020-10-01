@@ -32,7 +32,17 @@ function open(
 // The type is Handlers<Uint8Array> by default.
 var defaultHandlers :Handlers<Uint8Array>|Handlers<string>
 
-// Default address to connect to. This is falsey if the JS library isn't served by gotalk.
+// Default web socket address to connect to, when no address is provided to open() or connection().
+// When the gotalk js library is served from the gotalk server, this is prepopulated with the
+// correct gotalk web socket address.
+// If you serve the gotalk library yourself, set this to the gotalk web socket server before
+// calling open() or connect() without an address.
+// Examples values:
+//   ws://example.com/gotalk     // http-based (unencrypted) absolute address
+//   wss://example.com/gotalk    // https-based (encrypted) absolute address
+//   //example.com/gotalk        // protocol matches document, with absolute address
+//   /gotalk                     // protocol and host matches document, with absolute path
+//
 var defaultResponderAddress :string
 
 // If set to true, some helpful messages may be logged to the console.

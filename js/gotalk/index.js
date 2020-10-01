@@ -16,8 +16,8 @@ gotalk.Buf = Buf
 gotalk.developmentMode = false
 gotalk.defaultResponderAddress = ""
 
-// this is set by init() to the default (inferred) value of gotalk.defaultResponderAddress
-// and used to show warning messages.
+// this is set by initWebDocumentDeps() to the default (inferred) value of
+// gotalk.defaultResponderAddress and used to show warning messages.
 var builtinDefaultResponderAddress = ""
 
 // scriptUrl is the gotalk.js script URL, updated by init()
