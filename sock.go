@@ -42,7 +42,8 @@ type Sock struct {
 	AutoRetryRequests bool
 
 	// HeartbeatInterval controls how much time a socket waits between sending its heartbeats.
-	// If this is 0, automatic sending of heartbeats is disabled. Defaults to 20 seconds.
+	// If this is 0, automatic sending of heartbeats is disabled.
+	// Defaults to 20 seconds when created with NewSock.
 	HeartbeatInterval time.Duration
 
 	// If not nil, this function is invoked when a heartbeat is recevied
@@ -52,7 +53,7 @@ type Sock struct {
 	// Used by connected sockets
 	wmu       sync.Mutex         // guards writes on conn
 	conn      io.ReadWriteCloser // non-nil after successful call to Connect or accept
-	closeCode int                // protocol error, or -1
+	closeCode int                // protocol error (ProtocolErrorXXX = closeCode-1)
 
 	// Used for sending requests:
 	nextOpID     uint32
@@ -65,7 +66,11 @@ type Sock struct {
 }
 
 func NewSock(h *Handlers) *Sock {
-	return &Sock{Handlers: h, closeCode: -1, HeartbeatInterval: 20 * time.Second}
+	// if you change this, also update WebSocket initialization in websocket.go
+	return &Sock{
+		Handlers:          h,
+		HeartbeatInterval: 20 * time.Second,
+	}
 }
 
 // Creates two sockets which are connected to eachother without any resource limits.
@@ -109,7 +114,7 @@ func ConnectTLS(how, addr string, config *tls.Config) (*Sock, error) {
 // handshake, followed by Read to read messages.
 func (s *Sock) Adopt(r io.ReadWriteCloser) {
 	s.conn = r
-	s.closeCode = -1
+	s.closeCode = 0
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -264,8 +269,8 @@ func (s *Sock) SendRequest(r *Request, reschan chan Response) error {
 	id := s.allocResChan(reschan)
 	if err := s.writeMsg(r.MsgType, id, r.Op, 0, r.Data); err != nil {
 		s.deallocResChan(id)
-		if s.closeCode != -1 {
-			return protocolError(s.closeCode)
+		if s.closeCode != 0 {
+			return protocolError(s.closeCode - 1) // -1 since procotol error codes are 0-based
 		}
 		return err
 	}
@@ -642,6 +647,11 @@ type netLocalAddressable interface {
 	LocalAddr() net.Addr
 }
 
+func (s *Sock) setProcolError(protocolErrorCode int) {
+	// procol error codes are 0-based
+	s.closeCode = protocolErrorCode + 1
+}
+
 // After completing a succesful handshake, call this function to read messages received to this
 // socket. Does not return until the socket is closed.
 // If HeartbeatInterval > 0 this method also sends automatic heartbeats.
@@ -727,7 +737,7 @@ readloop:
 
 			case MsgTypeProtocolError:
 				code := int(size)
-				s.closeCode = code
+				s.setProcolError(code)
 				s.Close()
 				err = protocolError(code)
 				break readloop
@@ -773,8 +783,8 @@ func (s *Sock) CloseError(code int) error {
 	if code < 0 {
 		code = ProtocolErrorAbnormal
 	}
+	s.setProcolError(code)
 	if s.conn != nil {
-		s.closeCode = code
 		s.wmu.Lock()
 		s.conn.Write(MakeMsg(MsgTypeProtocolError, "", "", 0, uint32(code)))
 		s.wmu.Unlock()
