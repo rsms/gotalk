@@ -68,14 +68,14 @@ release:
     git status --ignore-submodules=dirty -s | grep -v '?? ' >&2; \
     exit 1; \
   fi
-	@# run code formatter and check if it made changes
+	@# run code formatter and mod tidy, then check if it made changes
 	$(MAKE) fmt
+	go mod tidy
 	@if [[ -n $$(git status --ignore-submodules=dirty --porcelain | grep -v '?? ') ]]; then \
     echo "gofmt altered some files:" >&2 ; \
     git status --ignore-submodules=dirty -s | grep -v '?? ' >&2; \
     exit 1; \
   fi
-	go mod tidy
 	$(MAKE) test
 	@echo "Finally, run the following to publish v${VERSION}:"
 	@echo "  git tag v${VERSION}"
