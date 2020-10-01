@@ -4,12 +4,13 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"github.com/rsms/gotalk"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/rsms/gotalk"
 )
 
 type Room struct {
@@ -158,7 +159,8 @@ func main() {
 	gotalkws.OnAccept = onAccept
 	http.Handle("/gotalk/", gotalkws)
 
+	addr := "localhost:1235"
 	http.Handle("/", http.FileServer(http.Dir(".")))
-	print("Listening on http://0.0.0.0:1235/\n")
-	panic(http.ListenAndServe(":1235", nil))
+	println("Listening on http://" + addr + "/")
+	panic(http.ListenAndServe(addr, nil))
 }
