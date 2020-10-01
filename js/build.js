@@ -46,7 +46,7 @@ async function postProcess(config, diagnostics) {
 
   await Promise.all([
     file.write(config.outfile, jsbuf2),
-    file.write("../jslib.go", goSource),
+    file.write("../jslib.go", goSource, {log:true}),
   ])
 }
 
