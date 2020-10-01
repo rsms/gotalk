@@ -163,6 +163,11 @@ func (s *Sock) Conn() io.ReadWriteCloser {
 	return s.conn
 }
 
+// String returns a name that uniquely identifies the socket during its lifetime
+func (s *Sock) String() string {
+	return fmt.Sprintf("%p", s)
+}
+
 // ----------------------------------------------------------------------------------------------
 
 func (s *Sock) getResChan(id string) chan Response {
