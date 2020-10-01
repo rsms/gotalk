@@ -31,9 +31,7 @@ func (s *WebSocket) Conn() *websocket.Conn { return s.ws }
 // Request returns the http request upgraded to the WebSocket
 func (s *WebSocket) Request() *http.Request { return s.ws.Request() }
 
-// Context returns the http request's context.
-// To change the context, use s.Request().WithContext(ctx).
-// The returned context is never nil; it defaults to the background context.
+// Context returns the http request's context. The returned context is never nil.
 func (s *WebSocket) Context() context.Context { return s.ws.Request().Context() }
 
 // ---------------------------------------------------------------------------------
