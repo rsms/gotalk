@@ -8,7 +8,8 @@ test:
 
 fmt:
 	@echo gofmt -w -s
-	@find -E . -type f -name '*.go' -not -regex '\./(_local|js|vendor)/.*' | xargs gofmt -w -s
+	@find . -depth 1 -type f -name '*.go' | xargs gofmt -w -s
+	@find ./examples -type f -name '*.go' | xargs gofmt -w -s
 
 doc:
 	@echo "open http://localhost:6060/pkg/github.com/rsms/gotalk/"
