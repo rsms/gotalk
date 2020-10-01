@@ -3,6 +3,7 @@ package gotalk
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"golang.org/x/net/websocket"
 	"net/http"
@@ -12,18 +13,181 @@ import (
 	"time"
 )
 
-type WebSocketServer struct {
-	Limits
-	Handlers *Handlers
-	OnAccept SockHandler
+// WebSocket is a type of gotalk.Sock used for web socket connections,
+// managed by a WebSocketServer.
+type WebSocket struct {
+	Sock
 
-	// Template value for accepted sockets. Defaults to 0 (no automatic heartbeats)
+	// A function to be called when the socket closes. See Socket.CloseHandler for details.
+	CloseHandler func(s *WebSocket, code int)
+
+	// could be gotten from s.Sock.Conn().(*websocket.Conn) but this is simpler and a bit faster.
+	ws *websocket.Conn
+}
+
+// Conn returns the underlying web socket connection
+func (s *WebSocket) Conn() *websocket.Conn { return s.ws }
+
+// Request returns the http request upgraded to the WebSocket
+func (s *WebSocket) Request() *http.Request { return s.ws.Request() }
+
+// Context returns the http request's context.
+// To change the context, use s.Request().WithContext(ctx).
+// The returned context is never nil; it defaults to the background context.
+func (s *WebSocket) Context() context.Context { return s.ws.Request().Context() }
+
+// ---------------------------------------------------------------------------------
+
+// WebSocketServer conforms to http.HandlerFunc and is used to serve Gotalk over HTTP or HTTPS
+type WebSocketServer struct {
+	// Limits control resource limits.
+	// Initially set to gotalk.DefaultLimits by NewWebSocketServer().
+	Limits
+
+	// Handlers describe what this server is capable of responding to.
+	// Initially set to gotalk.DefaultHandlers by NewWebSocketServer().
+	//
+	// Handler can be assigned a new set of handlers at any time.
+	// Whenever a new socket is connected, it references the current value of Handlers, therefore
+	// changes to Handlers has an effect for newly connected sockets only.
+	*Handlers
+
+	// OnConnect is an optional handler to be invoked when a new socket is connected.
+	// This handler is only called for sockets which passed the protocol handshake.
+	// If you want to deny a connection, simply call s.Close() on the socket in this handler.
+	//
+	// Gotalk checks if Origin header is a valid URL by default but does nothing else in terms of
+	// origin validation. You might want to verify s.Conn().Config().Origin in OnConnect.
+	OnConnect func(s *WebSocket)
+
+	// HeartbeatInterval is not used directly by WebSocketServer but assigned to every new socket
+	// that is connected. The default initial value (0) means "no automatic heartbeats" (disabled.)
+	//
+	// Note that automatic heartbeats are usually not a good idea for web sockets for two reasons:
+	//
+	//   a) You usually want to keep as few connections open as possible; letting them time out is
+	//      often desired (heartbeats prevent connection timeout.)
+	//
+	//   b) Automatic timeout uses more resources
+	//
 	HeartbeatInterval time.Duration
 
-	// Template value for accepted sockets. Defaults to nil
+	// OnHeartbeat is an optional callback for heartbeat confirmation messages.
+	// Not used directly by WebSocketServer but assigned to every new socket that is connected.
 	OnHeartbeat func(load int, t time.Time)
 
+	// Underlying websocket server (will become a function in gotalk 2)
 	Server *websocket.Server
+
+	// DEPRECATED use OnConnect instead
+	OnAccept SockHandler
+
+	// storage for underlying web socket server.
+	// Server is a pointer to this for legacy reasons.
+	// Gotalk <=1.1.5 allocated websocket.Server separately on the heap and assigned it to Server.
+	server websocket.Server
+}
+
+// NewWebSocketServer creates a web socket server which is a http.Handler
+func NewWebSocketServer() *WebSocketServer {
+	s := &WebSocketServer{
+		Limits:   DefaultLimits,
+		Handlers: DefaultHandlers,
+		server: websocket.Server{
+			Handshake: checkOrigin,
+		},
+	}
+	s.Server = &s.server // legacy API
+	s.server.Handler = s.onAccept
+	return s
+}
+
+// DEPREACTED use NewWebSocketServer
+func WebSocketHandler() *WebSocketServer {
+	return NewWebSocketServer()
+}
+
+func (s *WebSocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, gotalkJSSuffix) {
+		if s.maybeReplyNotModified(w, r) {
+			return
+		}
+		contentLength := jslibLen
+		body := jslibBody
+		header := w.Header()
+		acceptEncoding := parseCommaStrSet(r.Header.Get("Accept-Encoding"))
+		if _, ok := acceptEncoding["gzip"]; ok {
+			header["Content-Encoding"] = []string{"gzip"}
+			contentLength = jslibLenGzip
+			body = jslibBodyGzip
+		}
+		header["Content-Length"] = contentLength
+		for k, v := range jslibHeader {
+			header[k] = v
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(body)
+	} else {
+		// upgrade request connection to web socket protocol
+		s.server.ServeHTTP(w, r)
+	}
+}
+
+// ---------------------------------------------------------------------------------
+// internal
+
+// onAccept is called for new web socket connections
+func (server *WebSocketServer) onAccept(ws *websocket.Conn) {
+	// Set the frame payload type of the web socket
+	ws.PayloadType = websocket.BinaryFrame
+
+	// Create a new gotalk socket of the WebSocket flavor
+	sock := &WebSocket{
+		Sock: Sock{
+			Handlers:          server.Handlers,
+			HeartbeatInterval: server.HeartbeatInterval,
+			OnHeartbeat:       server.OnHeartbeat,
+		},
+		ws: ws,
+	}
+	sock.Sock.CloseHandler = func(_ *Sock, code int) {
+		if sock.CloseHandler != nil {
+			sock.CloseHandler(sock, code)
+		}
+	}
+
+	// Adopt the web socket
+	sock.Adopt(ws)
+
+	// perform protocol handshake
+	if err := sock.Handshake(); err != nil {
+		sock.Close()
+		return
+	}
+
+	// Call optional OnConnect handler
+	if server.OnConnect != nil {
+		server.OnConnect(sock)
+	} else if server.OnAccept != nil {
+		// legacy deprecated callback
+		server.OnAccept(&sock.Sock)
+	}
+
+	// If the OnConnect handler closed the connection, stop here
+	if sock.conn == nil {
+		return
+	}
+
+	// enter read loop
+	sock.Read(server.Limits)
+}
+
+func checkOrigin(config *websocket.Config, req *http.Request) (err error) {
+	config.Origin, err = websocket.Origin(config, req)
+	if err == nil && config.Origin == nil {
+		return fmt.Errorf("null origin")
+	}
+	return err
 }
 
 const gotalkJSSuffix = "/gotalk.js"
@@ -114,66 +278,4 @@ func parseCommaStrSet(s string) map[string]struct{} {
 		m[s[start:end]] = struct{}{}
 	}
 	return m
-}
-
-func (s *WebSocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if strings.HasSuffix(r.URL.Path, gotalkJSSuffix) {
-		if s.maybeReplyNotModified(w, r) {
-			return
-		}
-		contentLength := jslibLen
-		body := jslibBody
-		header := w.Header()
-		acceptEncoding := parseCommaStrSet(r.Header.Get("Accept-Encoding"))
-		if _, ok := acceptEncoding["gzip"]; ok {
-			header["Content-Encoding"] = []string{"gzip"}
-			contentLength = jslibLenGzip
-			body = jslibBodyGzip
-		}
-		header["Content-Length"] = contentLength
-		for k, v := range jslibHeader {
-			header[k] = v
-		}
-		w.WriteHeader(http.StatusOK)
-		w.Write(body)
-	} else {
-		// upgrade request connection to web socket protocol
-		s.Server.ServeHTTP(w, r)
-	}
-}
-
-// Handler that can be used with the http package
-func WebSocketHandler() *WebSocketServer {
-	server := &WebSocketServer{
-		Limits:   DefaultLimits,
-		Handlers: DefaultHandlers,
-	}
-
-	handler := func(ws *websocket.Conn) {
-		s := NewSock(server.Handlers)
-		ws.PayloadType = websocket.BinaryFrame // websocket.TextFrame;
-		s.Adopt(ws)
-		if err := s.Handshake(); err != nil {
-			s.Close()
-		} else {
-			if server.OnAccept != nil {
-				server.OnAccept(s)
-			}
-			s.HeartbeatInterval = server.HeartbeatInterval
-			s.OnHeartbeat = server.OnHeartbeat
-			s.Read(server.Limits)
-		}
-	}
-
-	server.Server = &websocket.Server{Handler: handler, Handshake: checkOrigin}
-
-	return server
-}
-
-func checkOrigin(config *websocket.Config, req *http.Request) (err error) {
-	config.Origin, err = websocket.Origin(config, req)
-	if err == nil && config.Origin == nil {
-		return fmt.Errorf("null origin")
-	}
-	return err
 }

@@ -28,7 +28,7 @@ Here is an example of a minimal but fully functional web server with Gotalk over
 			return &Message{Author: "Bob", Body: input}, nil
 		})
 		// mount Gotalk at "/gotalk/"
-		http.Handle("/gotalk/", gotalk.WebSocketHandler())
+		http.Handle("/gotalk/", gotalk.NewWebSocketServer())
 		// mount a file server to handle all other requests
 		http.Handle("/", http.FileServer(http.Dir(".")))
 		panic(http.ListenAndServe("localhost:1234", nil))

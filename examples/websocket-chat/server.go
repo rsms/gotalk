@@ -4,6 +4,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -40,21 +41,26 @@ type RoomMap map[string]*Room
 var (
 	rooms   RoomMap
 	roomsmu sync.RWMutex
-	socks   map[*gotalk.Sock]int
+	socks   map[*gotalk.WebSocket]int
 	socksmu sync.RWMutex
 )
 
-func onAccept(s *gotalk.Sock) {
+func onConnect(s *gotalk.WebSocket) {
 	// Keep track of connected sockets
 	socksmu.Lock()
 	defer socksmu.Unlock()
 	socks[s] = 1
 
-	s.CloseHandler = func(s *gotalk.Sock, _ int) {
+	// When the connection closes, remove the socket from our lists of connected peers
+	s.CloseHandler = func(s *gotalk.WebSocket, _ int) {
+		fmt.Printf("Peer %s diconnected\n", s)
 		socksmu.Lock()
 		defer socksmu.Unlock()
 		delete(socks, s)
 	}
+
+	// log a message when a peer connects
+	fmt.Printf("Peer %s connected on %s\n", s, s.Conn().LocalAddr())
 
 	// Send list of rooms
 	roomsmu.RLock()
@@ -107,7 +113,7 @@ func randomName() string {
 }
 
 func main() {
-	socks = make(map[*gotalk.Sock]int)
+	socks = make(map[*gotalk.WebSocket]int)
 	rooms = make(RoomMap)
 
 	// Load names data
@@ -155,12 +161,12 @@ func main() {
 	})
 
 	// Serve gotalk at "/gotalk/"
-	gotalkws := gotalk.WebSocketHandler()
-	gotalkws.OnAccept = onAccept
-	http.Handle("/gotalk/", gotalkws)
+	gh := gotalk.WebSocketHandler()
+	gh.OnConnect = onConnect
+	http.Handle("/gotalk/", gh)
 
 	addr := "localhost:1235"
 	http.Handle("/", http.FileServer(http.Dir(".")))
-	println("Listening on http://" + addr + "/")
+	fmt.Printf("Listening on http://%s/\n", addr)
 	panic(http.ListenAndServe(addr, nil))
 }
