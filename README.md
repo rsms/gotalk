@@ -54,6 +54,15 @@ func main() {
 ```
 
 
+### Developing Gotalk & contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md)
+
+### Other implementations
+
+- <https://github.com/gtaylor/python-gotalk>
+
+
 ## Introduction
 
 ![A terribly boring amateur comic strip](https://github.com/rsms/gotalk/raw/master/doc/gotalk-comic.png)
@@ -516,8 +525,3 @@ Requests and results does not need to match on the "single" vs "streaming" detai
 
 For transports which might need "heartbeats" to stay alive, like some raw TCP connections over the internet, the suggested way to implement this is by notifications, e.g. send a "heartbeat" notification at a certain interval while no requests are being sent. The Gotalk protocol does not include a "heartbeat" feature because of this reason, as well as the fact that some transports (like web socket) already provide "heartbeat" features.
 
-
-
-## Other implementations
-
-- <https://github.com/gtaylor/python-gotalk>
