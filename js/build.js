@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const { build, sha1, file } = require("estrella")
+const pkg = require("./package.json")
 const fs = require("fs").promises
 
 process.chdir(__dirname)
@@ -12,6 +13,7 @@ build({
   globalName: "gotalk",
   target: "es5",
   // format: "cjs",
+  define: { VERSION: pkg.version },
   onEnd: postProcess,
 })
 

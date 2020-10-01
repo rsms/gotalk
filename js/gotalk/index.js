@@ -6,11 +6,12 @@ import * as protocol from "./protocol"
 import * as utf8 from "./utf8"
 
 var gotalk = exports;
-export default exports
+export default exports;
 
 var txt = protocol.text
 var bin = protocol.binary
 
+gotalk.version = VERSION // VERSION defined by compiler
 gotalk.protocol = protocol
 gotalk.Buf = Buf
 gotalk.developmentMode = false

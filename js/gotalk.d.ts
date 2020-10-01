@@ -49,6 +49,10 @@ var defaultResponderAddress :string
 // The initial value is true when gotalk is served in a web browser over localhost, else its false.
 var developmentMode :boolean
 
+// Version of the gotalk JavaScript library. Example: "1.2.3".
+// For what version of the Gotalk protocol this library supports, see protocol.Version.
+const version :string
+
 // Sock creates a socket
 function Sock<T>(handlers :Handlers<T>, proto? :Protocol<T>) :Sock<T>
 
