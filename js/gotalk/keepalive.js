@@ -94,7 +94,7 @@ export function keepalive(s, addr, minReconnectDelay, maxReconnectDelay) {
     }
     if (err) {
       if (err.isGotalkProtocolError) {
-        if (err.code === protocol.ErrorTimeout) {
+        if (err.code === ErrorTimeout) {
           delay = 0;
         } else {
           // We shouldn't retry with the same version of our gotalk library.

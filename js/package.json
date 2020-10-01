@@ -30,6 +30,6 @@
     "build-dev": "node build.js -g -w"
   },
   "devDependencies": {
-    "estrella": "^1.1.1"
+    "estrella": "^1.2.8"
   }
 }
