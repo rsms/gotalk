@@ -64,18 +64,18 @@ release:
 		exit 1; \
 	fi
 	@# make sure git status is clean
-	@if [[ -n $$(git status --ignore-submodules=dirty --porcelain | grep -v '?? ') ]]; then \
-    echo "uncommitted changes:" >&2 ; \
-    git status --ignore-submodules=dirty -s | grep -v '?? ' >&2; \
-    exit 1; \
+	@if [[ -n $$(git status --untracked-files=no --ignore-submodules=dirty --porcelain) ]]; then \
+		echo "uncommitted changes:" >&2 ; \
+		git status --ignore-submodules=dirty --untracked-files=no -s >&2; \
+		exit 1; \
   fi
 	@# run code formatter and mod tidy, then check if it made changes
 	$(MAKE) fmt
 	go mod tidy
-	@if [[ -n $$(git status --ignore-submodules=dirty --porcelain | grep -v '?? ') ]]; then \
-    echo "gofmt altered some files:" >&2 ; \
-    git status --ignore-submodules=dirty -s | grep -v '?? ' >&2; \
-    exit 1; \
+	@if [[ -n $$(git status --untracked-files=no --ignore-submodules=dirty --porcelain) ]]; then \
+		echo "gofmt and/or 'go mod tidy' altered some files:" >&2 ; \
+		git status --ignore-submodules=dirty --untracked-files=no -s >&2; \
+		exit 1; \
   fi
 	$(MAKE) test
 	@echo "Finally, run the following to publish v${VERSION}:"
