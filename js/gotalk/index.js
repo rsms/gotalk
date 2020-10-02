@@ -164,6 +164,8 @@ var websocketCloseStatus = {
   1009: 'too large',
 };
 
+var CLOSE_ERROR = Symbol("CLOSE_ERROR")
+
 
 function wsCloseStatusMsg(code) {
   var name = websocketCloseStatus[code]
@@ -180,7 +182,7 @@ Sock.prototype.adoptWebSocket = function(ws) {
   ws.binaryType = 'arraybuffer';
   s.ws = ws;
   ws.onclose = function(ev) {
-    var err = ws._gotalkCloseError;
+    var err = ws[CLOSE_ERROR] || null;
     if (!err && ev.code !== 1000) {
       err = new Error('websocket closed: ' + wsCloseStatusMsg(ev.code));
     }
@@ -299,13 +301,13 @@ Sock.prototype.startReading = function () {
     if (msg.t === protocol.MsgTypeProtocolError) {
       var errcode = msg.size;
       if (errcode === protocol.ErrorAbnormal) {
-        ws._gotalkCloseError = ErrAbnormal;
+        ws[CLOSE_ERROR] = ErrAbnormal;
       } else if (errcode === protocol.ErrorUnsupported) {
-        ws._gotalkCloseError = ErrUnsupported;
+        ws[CLOSE_ERROR] = ErrUnsupported;
       } else if (errcode === protocol.ErrorTimeout) {
-        ws._gotalkCloseError = ErrTimeout;
+        ws[CLOSE_ERROR] = ErrTimeout;
       } else {
-        ws._gotalkCloseError = ErrInvalidMsg;
+        ws[CLOSE_ERROR] = ErrInvalidMsg;
       }
       ws.close(4000 + errcode);
     } else if (msg.size !== 0 && msg.t !== protocol.MsgTypeHeartbeat) {
@@ -327,7 +329,7 @@ Sock.prototype.startReading = function () {
     var peerVersion = typeof ev.data === 'string' ? txt.parseVersion(ev.data) :
                                                     bin.parseVersion(Buf(ev.data));
     if (peerVersion !== protocol.Version) {
-      ws._gotalkCloseError = ErrUnsupported;
+      ws[CLOSE_ERROR] = ErrUnsupported;
       s.closeError(protocol.ErrorUnsupported);
     } else {
       ws.onmessage = readMsg;
@@ -358,7 +360,7 @@ Sock.prototype.handleMsg = function(msg, payload) {
   var msgHandler = msgHandlers[msg.t];
   if (!msgHandler) {
     if (s.ws) {
-      s.ws._gotalkCloseError = ErrInvalidMsg;
+      s.ws[CLOSE_ERROR] = ErrInvalidMsg;
     }
     s.closeError(protocol.ErrorInvalidMsg);
   } else {
