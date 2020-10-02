@@ -109,7 +109,10 @@ export function keepalive(s, addr, minReconnectDelay, maxReconnectDelay) {
         delay = delay ? Math.min(maxReconnectDelay, delay * 2) : minReconnectDelay;
       }
     } else {
-      delay = Math.max(0, minReconnectDelay - ((new Date) - opentime));
+      // Connection closed cleanly.
+      // Usually means that the server is restarting or switching networks.
+      // Use a small minimum delay.
+      delay = Math.max(100, minReconnectDelay - ((new Date) - opentime));
     }
     openTimer = setTimeout(open, delay);
   };
