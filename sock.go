@@ -14,7 +14,10 @@ import (
 )
 
 // Returned by (Sock)BufferRequest when a streaming response is recieved
-var ErrUnexpectedStreamingRes = errors.New("unexpected streaming response")
+var (
+	ErrUnexpectedStreamingRes = errors.New("unexpected streaming response")
+	ErrSockClosed             = errors.New("socket is closed")
+)
 
 type pendingResMap map[string]chan Response
 type pendingReqMap map[string]chan []byte
@@ -63,6 +66,9 @@ type Sock struct {
 	// Used for handling streaming requests:
 	pendingReq   pendingReqMap
 	pendingReqMu sync.RWMutex
+
+	// Used for graceful shutdown
+	shutdownWg *sync.WaitGroup // non-nil means that the socket has been shut down
 }
 
 func NewSock(h *Handlers) *Sock {
@@ -271,6 +277,9 @@ func (s *Sock) writeMsgString(t MsgType, id, op string, wait uint32, str string)
 
 // Send a single-buffer request. A response should be received from reschan.
 func (s *Sock) SendRequest(r *Request, reschan chan Response) error {
+	if s.shutdownWg != nil {
+		return ErrSockClosed
+	}
 	id := s.allocResChan(reschan)
 	if err := s.writeMsg(r.MsgType, id, r.Op, 0, r.Data); err != nil {
 		s.deallocResChan(id)
@@ -331,6 +340,9 @@ func (s *Sock) StreamRequest(op string) (*StreamRequest, chan Response) {
 
 // Send a single-buffer notification
 func (s *Sock) BufferNotify(name string, buf []byte) error {
+	if s.shutdownWg != nil {
+		return ErrSockClosed
+	}
 	return s.writeMsg(MsgTypeNotification, "", name, 0, buf)
 }
 
@@ -374,6 +386,9 @@ func (s *Sock) respondOK(id string, b []byte) error {
 
 type readDeadline interface {
 	SetReadDeadline(time.Time) error
+}
+type writeDeadline interface {
+	SetWriteDeadline(time.Time) error
 }
 
 func (s *Sock) readBufferReq(limits Limits, id, op string, size int) error {
@@ -661,9 +676,12 @@ func (s *Sock) setProcolError(protocolErrorCode int) {
 // socket. Does not return until the socket is closed.
 // If HeartbeatInterval > 0 this method also sends automatic heartbeats.
 func (s *Sock) Read(limits Limits) error {
+	if s.shutdownWg != nil {
+		return ErrSockClosed
+	}
+
 	readTimeout := limits.ReadTimeout()
 	hasReadDeadline := readTimeout != time.Duration(0)
-	var rd readDeadline
 
 	// Pipes doesn't support deadlines
 	netaddr, ok := s.conn.(netLocalAddressable)
@@ -686,7 +704,7 @@ func (s *Sock) Read(limits Limits) error {
 	readbuf := make([]byte, 128)
 
 readloop:
-	for s.conn != nil {
+	for s.conn != nil && s.shutdownWg == nil {
 
 		// debug: read a chunk and print it
 		// b := make([]byte, 128)
@@ -703,12 +721,13 @@ readloop:
 
 		// Set read timeout
 		if hasReadDeadline {
-			var ok bool
-			if rd, ok = s.conn.(readDeadline); ok {
-				readTimeoutAt := time.Now().Add(readTimeout)
-				// fmt.Printf("setting read timeout to %v  %v\n", readTimeout, readTimeoutAt)
-				if err = rd.SetReadDeadline(readTimeoutAt); err != nil {
-					panic("SetReadDeadline failed: " + err.Error())
+			if rd, ok := s.conn.(readDeadline); ok {
+				if err = rd.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
+					// If we failed to set read timeout, close socket immediately and report error.
+					// The alternative, to ignore that read deadline could not be set, would be dangerous
+					// in case that the user relies on timeouts for resource management and security.
+					s.Close()
+					return err
 				}
 			}
 		}
@@ -758,12 +777,19 @@ readloop:
 			if err == io.EOF {
 				s.Close()
 			} else if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
-				s.CloseError(ProtocolErrorTimeout)
+				if s.shutdownWg == nil {
+					s.CloseError(ProtocolErrorTimeout)
+				} // else: we will s.Close later on
 			} else {
 				s.CloseError(ProtocolErrorInvalidMsg)
 			}
-			break readloop
+			break
 		}
+	}
+
+	if s.shutdownWg != nil {
+		s.Close()
+		s.shutdownWg.Done()
 	}
 
 	if heartbeatStopChan != nil {
@@ -793,7 +819,8 @@ func (s *Sock) CloseError(code int) error {
 		s.wmu.Lock()
 		s.conn.Write(MakeMsg(MsgTypeProtocolError, "", "", 0, uint32(code)))
 		s.wmu.Unlock()
-		return s.Close()
+		err := s.Close()
+		return err
 	}
 	return nil
 }
@@ -809,4 +836,36 @@ func (s *Sock) Close() error {
 		return err
 	}
 	return nil
+}
+
+// Shut down this socket, giving it timeout time to complete any ongoing work.
+//
+// timeout should be a short duration as its used for I/O read and write timeout; any work in
+// handlers does not account to the timeout (and is unlimited.) timeout is ignored if the
+// underlying Conn() does not implement SetReadDeadline or SetWriteDeadline.
+//
+// This method returns immediately. Once all work is complete, calls s.Close() and wg.Done().
+//
+// This method should not be used with web socket connections. Instead, call Close() from
+// your http.Server.RegisterOnShutdown handler.
+//
+func (s *Sock) Shutdown(wg *sync.WaitGroup, timeout time.Duration) error {
+	if s.shutdownWg != nil {
+		return ErrSockClosed
+	}
+	s.shutdownWg = wg
+
+	// give the connection a very short time to complete reads & writes
+	deadline := time.Now().Add(timeout)
+
+	var err error
+	if rd, ok := s.conn.(readDeadline); ok {
+		// give a Read call a short amount of time to complete
+		err = rd.SetReadDeadline(deadline)
+	}
+	if wd, ok := s.conn.(writeDeadline); ok {
+		// give a Read call a short amount of time to complete
+		err = wd.SetWriteDeadline(deadline)
+	}
+	return err
 }
