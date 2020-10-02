@@ -245,6 +245,7 @@ newRoom.onsubmit = function () {
 
 // Update list of rooms when connection opens
 function onConnect(s) {
+  console.log("connection opened")
   if (currentRoom) {
     fetchMessagesInRoom(currentRoom);
   }
@@ -264,7 +265,11 @@ function onConnect(s) {
 
 
 // Connect to server
-var s = gotalk.connection().on('open', onConnect);
+var s = gotalk.connection()
+  .on('open', onConnect)
+  .on("close", err => {
+    console.log("connection closed" + (err ? " with error: " + err : ""))
+  })
 
 
 // Intercept ctrl+accesskey

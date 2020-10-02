@@ -2,13 +2,17 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/rsms/gotalk"
@@ -163,10 +167,54 @@ func main() {
 	// Serve gotalk at "/gotalk/"
 	gh := gotalk.WebSocketHandler()
 	gh.OnConnect = onConnect
-	http.Handle("/gotalk/", gh)
+	routes := &http.ServeMux{}
+	server := &http.Server{Addr: "localhost:1235", Handler: routes}
+	routes.Handle("/gotalk/", gh)
 
-	addr := "localhost:1235"
-	http.Handle("/", http.FileServer(http.Dir(".")))
-	fmt.Printf("Listening on http://%s/\n", addr)
-	panic(http.ListenAndServe(addr, nil))
+	// Handle static files
+	routes.Handle("/", http.FileServer(http.Dir(".")))
+
+	// Enable SIGINT (^C) to perform a graceful shut down
+	done := enableGracefulShutdown(server, 5*time.Second)
+
+	// Start server
+	fmt.Printf("Listening on http://%s/\n", server.Addr)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		panic(err)
+	}
+
+	// Wait for shutdown to complete
+	<-done
+}
+
+func enableGracefulShutdown(server *http.Server, timeout time.Duration) chan struct{} {
+	server.RegisterOnShutdown(func() {
+		// close all connected sockets
+		fmt.Printf("graceful shutdown: closing sockets\n")
+		socksmu.RLock()
+		defer socksmu.RUnlock()
+		for s := range socks {
+			s.CloseHandler = nil // avoid deadlock on socksmu (also not needed)
+			s.Close()
+		}
+	})
+	done := make(chan struct{})
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT)
+	go func() {
+		<-quit // wait for signal
+
+		fmt.Printf("graceful shutdown initiated\n")
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+
+		server.SetKeepAlivesEnabled(false)
+		if err := server.Shutdown(ctx); err != nil {
+			fmt.Printf("server.Shutdown error: %s\n", err)
+		}
+
+		fmt.Printf("graceful shutdown complete\n")
+		close(done)
+	}()
+	return done
 }
