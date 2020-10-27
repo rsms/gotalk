@@ -2,6 +2,11 @@
 
 [Gotalk](https://github.com/rsms/gotalk) exists to make it easy for programs to *talk with one another over the internet*, like a web app coordinating with a web server, or a bunch of programs dividing work amongst each other.
 
+![GitHub tag (latest SemVer)](https://img.shields.io/github/tag/rsms/gotalk.svg)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/rsms/gotalk)](https://pkg.go.dev/github.com/rsms/gotalk)
+[![Go Report Card](https://goreportcard.com/badge/github.com/rsms/gotalk)](https://goreportcard.com/report/github.com/rsms/gotalk)
+
+
 Gotalk...
 
 - is an efficient, easily debuggable [multiplexing data transfer protocol](#protocol-and-wire-format)
@@ -9,9 +14,9 @@ Gotalk...
 - offers a high-level, easy-to-get-started API for WebSockets
 - enables arbitrary number of requests & responses over a single persistent connection
 - includes a small built-in [JavaScript library](/js/)
-- provides a small and focused [Go API](https://pkg.go.dev/github.com/rsms/gotalk)
+- provides a small and focused [Go API][godoc]
 
-> [Go API Documentation on godoc.org →](https://pkg.go.dev/github.com/rsms/gotalk)
+> [Go API Documentation on godoc.org →][godoc]
 
 
 ## Usage
@@ -525,3 +530,5 @@ Requests and results does not need to match on the "single" vs "streaming" detai
 
 For transports which might need "heartbeats" to stay alive, like some raw TCP connections over the internet, the suggested way to implement this is by notifications, e.g. send a "heartbeat" notification at a certain interval while no requests are being sent. The Gotalk protocol does not include a "heartbeat" feature because of this reason, as well as the fact that some transports (like web socket) already provide "heartbeat" features.
 
+
+[godoc]: https://pkg.go.dev/github.com/rsms/gotalk
