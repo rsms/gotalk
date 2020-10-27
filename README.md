@@ -3,7 +3,7 @@
 [Gotalk](https://github.com/rsms/gotalk) exists to make it easy for programs to *talk with one another over the internet*, like a web app coordinating with a web server, or a bunch of programs dividing work amongst each other.
 
 ![GitHub tag (latest SemVer)](https://img.shields.io/github/tag/rsms/gotalk.svg)
-[![PkgGoDev](https://pkg.go.dev/badge/github.com/rsms/gotalk)](https://pkg.go.dev/github.com/rsms/gotalk)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/rsms/gotalk)][godoc]
 [![Go Report Card](https://goreportcard.com/badge/github.com/rsms/gotalk)](https://goreportcard.com/report/github.com/rsms/gotalk)
 
 
