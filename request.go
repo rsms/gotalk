@@ -44,7 +44,7 @@ func (r *StreamRequest) End() error {
 
 func (r *StreamRequest) finalize() {
 	if r.id != "" {
-		r.sock.deallocResChan(r.id)
+		r.sock.forgetResChan(r.id)
 		r.id = ""
 	}
 }

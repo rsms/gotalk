@@ -2,15 +2,16 @@ package main
 
 import (
 	"fmt"
-	"github.com/rsms/gotalk"
 	"time"
+
+	"github.com/rsms/gotalk"
 )
 
 func responder(port string) {
 	// A simple echo operation with a 500ms response delay
 	gotalk.HandleBufferRequest("echo", func(s *gotalk.Sock, op string, buf []byte) ([]byte, error) {
 		fmt.Printf("responder: handling request\n")
-		time.Sleep(time.Millisecond * 400)
+		time.Sleep(time.Millisecond * 10)
 		return buf, nil
 	})
 
@@ -20,8 +21,13 @@ func responder(port string) {
 		panic(err)
 	}
 
-	// Limit this server to 5 concurrent requests (and disable streaming messages)
-	s.Limits = gotalk.NewLimits(5, 0)
+	// Limit this server to 5 concurrent requests and set really low wait times
+	// to that this demo doesn't take forever to run.
+	s.Limits = &gotalk.Limits{
+		BufferRequests: 5,
+		BufferMinWait:  10 * time.Millisecond,
+		BufferMaxWait:  100 * time.Millisecond,
+	}
 
 	// Accept connections
 	fmt.Printf("listening at %q\n", s.Addr())

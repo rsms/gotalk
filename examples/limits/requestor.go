@@ -46,11 +46,12 @@ func requestor(port string) {
 			}
 			i--
 		} else if res.IsError() {
-			panic(res)
+			panic(fmt.Sprintf("error response: %v", res.Error()))
 		} else {
 			fmt.Printf("requestor: received response: %q\n", string(res.Data))
 		}
 	}
 
+	fmt.Printf("done. Closing socket\n")
 	s.Close()
 }

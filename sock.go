@@ -10,13 +10,14 @@ import (
 	"net"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // Returned by (Sock)BufferRequest when a streaming response is recieved
 var (
 	ErrUnexpectedStreamingRes = errors.New("unexpected streaming response")
-	ErrSockClosed             = errors.New("socket is closed")
+	ErrSockClosed             = errors.New("socket closed")
 )
 
 type pendingResMap map[string]chan Response
@@ -54,9 +55,10 @@ type Sock struct {
 
 	// -------------------------------------------------------------------------
 	// Used by connected sockets
-	wmu       sync.Mutex         // guards writes on conn
+	connmu    sync.RWMutex       // guards writes on conn and conn itself (W)
 	conn      io.ReadWriteCloser // non-nil after successful call to Connect or accept
-	closeCode int                // protocol error (ProtocolErrorXXX = closeCode-1)
+	closex    uint32             // atomic switch for closing conn (see Close())
+	closeCode int32              // protocol error (ProtocolErrorXXX = closeCode-1)
 
 	// Used for sending requests:
 	nextOpID     uint32
@@ -80,8 +82,9 @@ func NewSock(h *Handlers) *Sock {
 }
 
 // Creates two sockets which are connected to eachother without any resource limits.
-// If `handlers` is nil, DefaultHandlers are used. If `limits` is nil, DefaultLimits are used.
-func Pipe(handlers *Handlers, limits Limits) (*Sock, *Sock, error) {
+// If `handlers` is nil, DefaultHandlers are used.
+// If `limits` is nil, DefaultLimits are used.
+func Pipe(handlers *Handlers, limits *Limits) (*Sock, *Sock, error) {
 	if handlers == nil {
 		handlers = DefaultHandlers
 	}
@@ -91,9 +94,6 @@ func Pipe(handlers *Handlers, limits Limits) (*Sock, *Sock, error) {
 	s1.Adopt(c1)
 	s2.Adopt(c2)
 	// Note: We deliberately ignore performing a handshake
-	if limits == nil {
-		limits = DefaultLimits
-	}
 	go s1.Read(limits)
 	go s2.Read(limits)
 	return s1, s2, nil
@@ -119,14 +119,18 @@ func ConnectTLS(how, addr string, config *tls.Config) (*Sock, error) {
 // After adopting a new connection, you should call Handshake to perform the protocol
 // handshake, followed by Read to read messages.
 func (s *Sock) Adopt(r io.ReadWriteCloser) {
+	// lock to wait for any ongoing writes
+	s.connmu.Lock()
 	s.conn = r
-	s.closeCode = 0
+	atomic.StoreInt32(&s.closeCode, 0)
+	atomic.StoreUint32(&s.closex, 0)
+	s.connmu.Unlock()
 }
 
 // ----------------------------------------------------------------------------------------------
 
 // Connect to a server via `how` at `addr`
-func (s *Sock) Connect(how, addr string, limits Limits) error {
+func (s *Sock) Connect(how, addr string, limits *Limits) error {
 	c, err := net.Dial(how, addr)
 	if err != nil {
 		return err
@@ -137,7 +141,7 @@ func (s *Sock) Connect(how, addr string, limits Limits) error {
 // Connect to a server via `how` at `addr` over TLS.
 // tls.Config is optional; passing nil is equivalent to &tls.Config{}
 //
-func (s *Sock) ConnectTLS(how, addr string, limits Limits, config *tls.Config) error {
+func (s *Sock) ConnectTLS(how, addr string, limits *Limits, config *tls.Config) error {
 	if config == nil {
 		config = &tls.Config{
 			RootCAs: TLSCertPool(),
@@ -155,7 +159,7 @@ func (s *Sock) ConnectTLS(how, addr string, limits Limits, config *tls.Config) e
 
 // Take control over reader r, perform initial handshake
 // and begin communication on a background goroutine.
-func (s *Sock) ConnectReader(r io.ReadWriteCloser, limits Limits) error {
+func (s *Sock) ConnectReader(r io.ReadWriteCloser, limits *Limits) error {
 	s.Adopt(r)
 	if err := s.Handshake(); err != nil {
 		return err
@@ -166,7 +170,10 @@ func (s *Sock) ConnectReader(r io.ReadWriteCloser, limits Limits) error {
 
 // Access the socket's underlying connection
 func (s *Sock) Conn() io.ReadWriteCloser {
-	return s.conn
+	s.connmu.RLock()
+	conn := s.conn
+	s.connmu.RUnlock()
+	return conn
 }
 
 // String returns a name that uniquely identifies the socket during its lifetime
@@ -176,34 +183,24 @@ func (s *Sock) String() string {
 
 // ----------------------------------------------------------------------------------------------
 
-func (s *Sock) getResChan(id string) chan Response {
-	s.pendingResMu.RLock()
-	defer s.pendingResMu.RUnlock()
-	if s.pendingRes == nil {
-		return nil
-	}
-	return s.pendingRes[id]
-}
-
-func (s *Sock) allocResChan(ch chan Response) string {
+func (s *Sock) registerResChan(ch chan Response) string {
 	s.pendingResMu.Lock()
-	defer s.pendingResMu.Unlock()
-
 	id := string(FormatRequestID(s.nextOpID))
 	s.nextOpID++
-
 	if s.pendingRes == nil {
 		s.pendingRes = make(pendingResMap)
 	}
 	s.pendingRes[id] = ch
-
+	s.pendingResMu.Unlock()
 	return id
 }
 
-func (s *Sock) deallocResChan(id string) {
+func (s *Sock) forgetResChan(id string) {
 	s.pendingResMu.Lock()
-	defer s.pendingResMu.Unlock()
-	delete(s.pendingRes, id)
+	if ch := s.pendingRes[id]; ch != nil {
+		delete(s.pendingRes, id)
+	}
+	s.pendingResMu.Unlock()
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -235,80 +232,89 @@ func (s *Sock) allocReqChan(id string) chan []byte {
 
 func (s *Sock) deallocReqChan(id string) {
 	s.pendingReqMu.Lock()
-	defer s.pendingReqMu.Unlock()
 	delete(s.pendingReq, id)
+	s.pendingReqMu.Unlock()
 }
 
 // ----------------------------------------------------------------------------------------------
 
-var errNotConnected = errors.New("not connected")
-
 func (s *Sock) writeMsg(t MsgType, id, op string, wait uint32, buf []byte) error {
+	s.connmu.Lock()
+	var err error
 	if s.conn == nil {
-		return errNotConnected
+		err = ErrSockClosed
+	} else {
+		msg := MakeMsg(t, id, op, wait, uint32(len(buf)))
+		if _, err = s.conn.Write(msg); err == nil && len(buf) != 0 {
+			_, err = s.conn.Write(buf)
+		}
 	}
-	s.wmu.Lock()
-	defer s.wmu.Unlock()
-	if _, err := s.conn.Write(MakeMsg(t, id, op, wait, uint32(len(buf)))); err != nil {
-		return err
-	}
-	if len(buf) != 0 {
-		_, err := s.conn.Write(buf)
-		return err
-	}
-	return nil
+	s.connmu.Unlock()
+	return err
 }
 
-func (s *Sock) writeMsgString(t MsgType, id, op string, wait uint32, str string) error {
-	if s.conn == nil {
-		return errNotConnected
-	}
-	s.wmu.Lock()
-	defer s.wmu.Unlock()
-	if _, err := s.conn.Write(MakeMsg(t, id, op, wait, uint32(len(str)))); err != nil {
-		return err
-	}
-	if len(str) != 0 {
-		_, err := io.WriteString(s.conn, str)
-		return err
-	}
-	return nil
-}
-
-// Send a single-buffer request. A response should be received from reschan.
+// Send a single-buffer request.
+// A response should be received from reschan.
 func (s *Sock) SendRequest(r *Request, reschan chan Response) error {
 	if s.shutdownWg != nil {
 		return ErrSockClosed
 	}
-	id := s.allocResChan(reschan)
-	if err := s.writeMsg(r.MsgType, id, r.Op, 0, r.Data); err != nil {
-		s.deallocResChan(id)
-		if s.closeCode != 0 {
-			return protocolError(s.closeCode - 1) // -1 since procotol error codes are 0-based
+	id := s.registerResChan(reschan)
+	err := s.writeMsg(r.MsgType, id, r.Op, 0, r.Data)
+	if err != nil {
+		s.forgetResChan(id)
+		if closeError := s.checkCloseCode(); closeError != nil {
+			err = closeError
 		}
-		return err
 	}
-	return nil
+	return err
+}
+
+func (s *Sock) checkCloseCode() error {
+	closeCode := atomic.LoadInt32(&s.closeCode)
+	if closeCode == 0 {
+		return nil
+	}
+	return protocolError(closeCode - 1) // -1 since procotol error codes are 0-based
 }
 
 // Send a single-buffer request, wait for and return the response.
 // Automatically retries the request if needed.
 func (s *Sock) BufferRequest(op string, buf []byte) ([]byte, error) {
-	reschan := make(chan Response)
+	reschan := make(chan Response, 1)
 	req := NewRequest(op, buf)
 	for {
 		err := s.SendRequest(req, reschan)
 		if err != nil {
+			if closeError := s.checkCloseCode(); closeError != nil {
+				err = closeError
+			}
 			return nil, err
 		}
 
-		res := <-reschan
+		// await response
+		res, ok := <-reschan
+		if !ok {
+			// channel closed
+			err = ErrSockClosed
+			if closeError := s.checkCloseCode(); closeError != nil {
+				err = closeError
+			}
+			return nil, err
+		}
 
 		if res.IsError() {
+			if res.Wait > 0 {
+				return nil, protocolError(int32(res.Wait))
+			}
 			return nil, &res
-		} else if res.IsStreaming() {
+		}
+
+		if res.IsStreaming() {
 			return nil, ErrUnexpectedStreamingRes
-		} else if res.IsRetry() {
+		}
+
+		if res.IsRetry() {
 			if res.Wait != 0 {
 				time.Sleep(res.Wait)
 			}
@@ -334,7 +340,7 @@ func (s *Sock) Request(op string, in interface{}, out interface{}) error {
 // Send a multi-buffer streaming request
 func (s *Sock) StreamRequest(op string) (*StreamRequest, chan Response) {
 	reschan := make(chan Response)
-	id := s.allocResChan(reschan)
+	id := s.registerResChan(reschan)
 	return &StreamRequest{sock: s, op: op, id: id}, reschan
 }
 
@@ -391,22 +397,22 @@ type writeDeadline interface {
 	SetWriteDeadline(time.Time) error
 }
 
-func (s *Sock) readBufferReq(limits Limits, id, op string, size int) error {
-	if limits.incBufferReq() == false {
-		return s.respondRetry(size, id, limitWaitBufferReq(), "request rate limit")
+func (s *Sock) readBufferReq(lim *limitsImpl, id, op string, size int) error {
+	if lim.incBufferReq() == false {
+		return s.respondRetry(size, id, lim.waitBufferReq(), "request rate limit")
 	}
 
 	handler := s.Handlers.FindBufferRequestHandler(op)
 	if handler == nil {
 		err := s.respondError(size, id, "unknown operation \""+op+"\"")
-		limits.decBufferReq()
+		lim.decBufferReq()
 		return err
 	}
 
 	// Read complete payload
 	inbuf := make([]byte, size)
 	if _, err := readn(s.conn, inbuf); err != nil {
-		limits.decBufferReq()
+		lim.decBufferReq()
 		return err
 	}
 
@@ -421,7 +427,7 @@ func (s *Sock) readBufferReq(limits Limits, id, op string, size int) error {
 					}
 				}
 			}
-			limits.decBufferReq()
+			lim.decBufferReq()
 		}()
 		outbuf, err := handler(s, op, inbuf)
 		if err != nil {
@@ -462,7 +468,7 @@ func (w *streamWriter) WriteString(s string) (n int, err error) {
 	if z == 0 {
 		w.wroteEOS = true
 	}
-	return z, w.s.writeMsgString(MsgTypeStreamRes, w.id, "", 0, s)
+	return z, w.s.writeMsg(MsgTypeStreamRes, w.id, "", 0, []byte(s))
 }
 
 func (w *streamWriter) Close() error {
@@ -473,10 +479,10 @@ func (w *streamWriter) Close() error {
 	return nil
 }
 
-func (s *Sock) readStreamReq(limits Limits, id, op string, size int) error {
-	if limits.incStreamReq() == false {
-		if limits.streamReqEnabled() {
-			return s.respondRetry(size, id, limitWaitStreamReq(), "request rate limit")
+func (s *Sock) readStreamReq(lim *limitsImpl, id, op string, size int) error {
+	if lim.incStreamReq() == false {
+		if lim.streamReqEnabled() {
+			return s.respondRetry(size, id, lim.waitStreamReq(), "request rate limit")
 		} else {
 			return s.respondError(size, id, "stream requests not supported")
 		}
@@ -485,14 +491,14 @@ func (s *Sock) readStreamReq(limits Limits, id, op string, size int) error {
 	handler := s.Handlers.FindStreamRequestHandler(op)
 	if handler == nil {
 		err := s.respondError(size, id, "unknown operation \""+op+"\"")
-		limits.decStreamReq()
+		lim.decStreamReq()
 		return err
 	}
 
 	// Read first buff
 	inbuf := make([]byte, size)
 	if _, err := readn(s.conn, inbuf); err != nil {
-		limits.decStreamReq()
+		lim.decStreamReq()
 		return err
 	}
 
@@ -514,13 +520,13 @@ func (s *Sock) readStreamReq(limits Limits, id, op string, size int) error {
 		if err := out.Close(); err != nil {
 			s.Close()
 		}
-		limits.decStreamReq()
+		lim.decStreamReq()
 	}()
 
 	return nil
 }
 
-func (s *Sock) readStreamReqPart(limits Limits, id string, size int) error {
+func (s *Sock) readStreamReqPart(lim *limitsImpl, id string, size int) error {
 	rch := s.getReqChan(id)
 	if rch == nil {
 		return errors.New("illegal message") // There was no "start stream" message
@@ -531,7 +537,7 @@ func (s *Sock) readStreamReqPart(limits Limits, id string, size int) error {
 	if size != 0 {
 		b = make([]byte, size)
 		if _, err := readn(s.conn, b); err != nil {
-			limits.decStreamReq()
+			lim.decStreamReq()
 			return err
 		}
 	}
@@ -543,26 +549,27 @@ func (s *Sock) readStreamReqPart(limits Limits, id string, size int) error {
 // -----------------------------------------------------------------------------------------------
 
 func (s *Sock) readResponse(t MsgType, id string, wait, size int) error {
-	ch := s.getResChan(id)
-	if ch == nil {
-		// Unexpected response: discard and ignore
-		return s.readDiscard(size)
-	}
-
-	if t != MsgTypeStreamRes || size == 0 {
-		s.deallocResChan(id)
-	}
-
 	// read payload
 	var buf []byte
 	if size != 0 {
 		buf = make([]byte, size)
 		if _, err := readn(s.conn, buf); err != nil {
+			s.forgetResChan(id)
 			return err
 		}
 	}
 
-	ch <- Response{t, buf, time.Duration(wait) * time.Millisecond}
+	// get response channel and hold the lock until we've sent the response
+	s.pendingResMu.Lock()
+	ch := s.pendingRes[id]
+	if ch != nil && t != MsgTypeStreamRes {
+		delete(s.pendingRes, id)
+	}
+	s.pendingResMu.Unlock()
+
+	if ch != nil {
+		ch <- Response{t, buf, time.Duration(wait) * time.Millisecond}
+	}
 
 	return nil
 }
@@ -610,7 +617,7 @@ var (
 	ErrTimeout     = errors.New("timeout")
 )
 
-func protocolError(code int) error {
+func protocolError(code int32) error {
 	switch code {
 	case ProtocolErrorAbnormal:
 		return ErrAbnormal
@@ -653,13 +660,13 @@ func (s *Sock) sendHeartbeats(stopChan chan bool) {
 }
 
 func (s *Sock) SendHeartbeat(load float32, buf []byte) error {
-	s.wmu.Lock()
-	defer s.wmu.Unlock()
-	if s.conn == nil {
-		return errors.New("not connected")
-	}
 	msg := MakeHeartbeatMsg(uint16(load*float32(HeartbeatMsgMaxLoad)), buf)
-	_, err := s.conn.Write(msg)
+	s.connmu.Lock()
+	var err error
+	if s.conn != nil {
+		_, err = s.conn.Write(msg)
+	}
+	s.connmu.Unlock()
 	return err
 }
 
@@ -667,24 +674,29 @@ type netLocalAddressable interface {
 	LocalAddr() net.Addr
 }
 
-func (s *Sock) setProcolError(protocolErrorCode int) {
+func (s *Sock) setProcolError(protocolErrorCode int32) {
 	// procol error codes are 0-based
-	s.closeCode = protocolErrorCode + 1
+	atomic.StoreInt32(&s.closeCode, protocolErrorCode+1)
 }
 
 // After completing a succesful handshake, call this function to read messages received to this
 // socket. Does not return until the socket is closed.
 // If HeartbeatInterval > 0 this method also sends automatic heartbeats.
-func (s *Sock) Read(limits Limits) error {
+func (s *Sock) Read(limits *Limits) error {
 	if s.shutdownWg != nil {
 		return ErrSockClosed
 	}
 
-	readTimeout := limits.ReadTimeout()
-	hasReadDeadline := readTimeout != time.Duration(0)
+	lim := makeLimitsImpl(limits)
+
+	s.connmu.RLock()
+	conn := s.conn
+	s.connmu.RUnlock()
+
+	hasReadDeadline := lim.readTimeout != time.Duration(0)
 
 	// Pipes doesn't support deadlines
-	netaddr, ok := s.conn.(netLocalAddressable)
+	netaddr, ok := conn.(netLocalAddressable)
 	isPipe := ok && netaddr.LocalAddr().Network() == "pipe"
 	if hasReadDeadline && isPipe {
 		hasReadDeadline = false
@@ -696,7 +708,7 @@ func (s *Sock) Read(limits Limits) error {
 		if s.HeartbeatInterval < time.Millisecond {
 			panic("HeartbeatInterval < time.Millisecond")
 		}
-		heartbeatStopChan = make(chan bool)
+		heartbeatStopChan = make(chan bool, 1)
 		go s.sendHeartbeats(heartbeatStopChan)
 	}
 
@@ -704,11 +716,11 @@ func (s *Sock) Read(limits Limits) error {
 	readbuf := make([]byte, 128)
 
 readloop:
-	for s.conn != nil && s.shutdownWg == nil {
+	for {
 
 		// debug: read a chunk and print it
 		// b := make([]byte, 128)
-		// if _, err := s.conn.Read(b); err != nil {
+		// if _, err := conn.Read(b); err != nil {
 		//   log.Println(err)
 		//   break
 		// }
@@ -721,8 +733,8 @@ readloop:
 
 		// Set read timeout
 		if hasReadDeadline {
-			if rd, ok := s.conn.(readDeadline); ok {
-				if err = rd.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
+			if rd, ok := conn.(readDeadline); ok {
+				if err = rd.SetReadDeadline(time.Now().Add(lim.readTimeout)); err != nil {
 					// If we failed to set read timeout, close socket immediately and report error.
 					// The alternative, to ignore that read deadline could not be set, would be dangerous
 					// in case that the user relies on timeouts for resource management and security.
@@ -733,20 +745,21 @@ readloop:
 		}
 
 		// Read next message
-		t, id, name, wait, size, err1 := ReadMsg(s.conn, readbuf)
+		t, id, name, wait, size, err1 := ReadMsg(conn, readbuf)
 		err = err1
+
 		if err == nil {
 			// fmt.Printf("Read: msg: t=%c  id=%q  name=%q  size=%v\n", byte(t), id, name, size)
 
 			switch t {
 			case MsgTypeSingleReq:
-				err = s.readBufferReq(limits, id, name, int(size))
+				err = s.readBufferReq(&lim, id, name, int(size))
 
 			case MsgTypeStreamReq:
-				err = s.readStreamReq(limits, id, name, int(size))
+				err = s.readStreamReq(&lim, id, name, int(size))
 
 			case MsgTypeStreamReqPart:
-				err = s.readStreamReqPart(limits, id, int(size))
+				err = s.readStreamReqPart(&lim, id, int(size))
 
 			case MsgTypeSingleRes, MsgTypeStreamRes, MsgTypeErrorRes, MsgTypeRetryRes:
 				err = s.readResponse(t, id, int(wait), int(size))
@@ -760,9 +773,11 @@ readloop:
 				}
 
 			case MsgTypeProtocolError:
-				code := int(size)
+				code := int32(size)
 				s.setProcolError(code)
-				s.Close()
+				if s.shutdownWg == nil {
+					s.Close()
+				}
 				err = protocolError(code)
 				break readloop
 
@@ -779,13 +794,16 @@ readloop:
 			} else if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 				if s.shutdownWg == nil {
 					s.CloseError(ProtocolErrorTimeout)
-				} // else: we will s.Close later on
+				}
 			} else {
-				s.CloseError(ProtocolErrorInvalidMsg)
+				// Broken connection (e.g. pipe error, connection reset by peer, etc.)
+				err = io.EOF
+				s.Close()
 			}
 			break
 		}
-	}
+
+	} // readloop
 
 	if s.shutdownWg != nil {
 		s.Close()
@@ -801,41 +819,83 @@ readloop:
 
 // Address of this socket
 func (s *Sock) Addr() string {
-	if s.conn != nil {
-		if netconn, ok := s.conn.(net.Conn); ok {
+	conn := s.Conn()
+	if conn != nil {
+		if netconn, ok := conn.(net.Conn); ok {
 			return netconn.RemoteAddr().String()
 		}
 	}
 	return ""
 }
 
-// Close this socket because of a protocol error
-func (s *Sock) CloseError(code int) error {
-	if code < 0 {
-		code = ProtocolErrorAbnormal
+// Close this socket because of a protocol error (ProtocolErrorXXX)
+func (s *Sock) CloseError(protocolErrorCode int32) error {
+	if protocolErrorCode < 0 {
+		panic("negative protocolErrorCode")
 	}
-	s.setProcolError(code)
-	if s.conn != nil {
-		s.wmu.Lock()
-		s.conn.Write(MakeMsg(MsgTypeProtocolError, "", "", 0, uint32(code)))
-		s.wmu.Unlock()
-		err := s.Close()
-		return err
-	}
-	return nil
+	s.connmu.Lock()
+	s.setProcolError(protocolErrorCode)
+	msg := MakeMsg(MsgTypeProtocolError, "", "", 0, uint32(protocolErrorCode))
+	s.conn.Write(msg) // ignore error
+	s.connmu.Unlock()
+	err := s.Close()
+	return err
 }
 
 // Close this socket
 func (s *Sock) Close() error {
-	if s.conn != nil {
-		err := s.conn.Close()
-		s.conn = nil
-		if s.CloseHandler != nil {
-			s.CloseHandler(s, s.closeCode)
-		}
-		return err
+	if atomic.AddUint32(&s.closex, 1) != 1 {
+		// another goroutine won the race or already closed
+		return nil
 	}
-	return nil
+
+	s.pendingResMu.Lock()
+	s.connmu.Lock()
+
+	// close the underlying connection
+	err := s.conn.Close()
+
+	// check for close error
+	closeCode := atomic.LoadInt32(&s.closeCode)
+	if closeCode > 0 {
+		err = protocolError(closeCode - 1) // -1 since procotol error codes are 0-based
+	}
+
+	// end any pending request-response channels
+	var errmsg []byte
+	var waitarg time.Duration
+	for _, ch := range s.pendingRes {
+		if errmsg == nil {
+			if err != nil {
+				errmsg = []byte(err.Error())
+			} else {
+				errmsg = []byte(ErrSockClosed.Error())
+			}
+			if closeCode != 0 {
+				waitarg = time.Duration(closeCode - 1)
+			}
+		}
+		select {
+		case ch <- Response{
+			MsgType: MsgTypeErrorRes,
+			Data:    errmsg,
+			Wait:    waitarg,
+		}:
+		default:
+		}
+	}
+
+	s.pendingRes = nil
+
+	s.connmu.Unlock()
+	s.pendingResMu.Unlock()
+
+	// call CloseHandler
+	if s.CloseHandler != nil {
+		s.CloseHandler(s, int(closeCode))
+	}
+
+	return err
 }
 
 // Shut down this socket, giving it timeout time to complete any ongoing work.

@@ -24,6 +24,7 @@ func recoverAsFail(t *testing.T) {
 
 func assertPanic(t *testing.T, expectedPanicRegExp string, f func()) {
 	// Note: (?i) makes it case-insensitive
+	t.Helper()
 	expected := regexp.MustCompile("(?i)" + expectedPanicRegExp)
 	defer func() {
 		if v := recover(); v != nil {
@@ -41,6 +42,7 @@ func assertPanic(t *testing.T, expectedPanicRegExp string, f func()) {
 }
 
 func assertError(t *testing.T, expectedErrorRegExp string, e error) {
+	t.Helper()
 	expected := regexp.MustCompile("(?i)" + expectedErrorRegExp)
 	if e == nil {
 		t.Errorf("expected error (but error is nil)")
@@ -51,12 +53,14 @@ func assertError(t *testing.T, expectedErrorRegExp string, e error) {
 
 func assertNotNil(t *testing.T, v interface{}) {
 	if v == nil {
+		t.Helper()
 		t.Errorf("nil")
 	}
 }
 
 func assertBytes(t *testing.T, expect, actual []byte) {
 	if !bytes.Equal(actual, expect) {
+		t.Helper()
 		t.Errorf("expected bytes %q but got %q", expect, actual)
 	}
 }
@@ -71,6 +75,8 @@ func reprValue(v interface{}) string {
 
 func assertEq(t *testing.T, expect, actual interface{}) {
 	if actual != expect {
-		t.Errorf("expected %s (%T) but got %s (%T)", reprValue(expect), expect, reprValue(actual), actual)
+		t.Helper()
+		t.Errorf("expected %s (%T) but got %s (%T)",
+			reprValue(expect), expect, reprValue(actual), actual)
 	}
 }

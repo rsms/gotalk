@@ -25,8 +25,10 @@ func responder(port string) {
 	}
 
 	// Configure limits with a read timeout of 200 milliseconds
-	s.Limits = gotalk.NewLimits(0, 0)
-	s.Limits.SetReadTimeout(200 * time.Millisecond)
+	s.Limits = &gotalk.Limits{
+		BufferRequests: gotalk.Unlimited,
+		ReadTimeout:    100 * time.Millisecond,
+	}
 
 	// Accept connections
 	fmt.Printf("responder: listening at %q\n", s.Addr())

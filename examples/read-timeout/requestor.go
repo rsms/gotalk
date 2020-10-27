@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/rsms/gotalk"
 	"io"
+	"strings"
+	"sync"
 	"time"
+
+	"github.com/rsms/gotalk"
 )
 
 // slowWriter simulates slow writing, to demonstrate timeout
@@ -24,18 +27,41 @@ func (rwc *slowWriter) Read(p []byte) (n int, err error) {
 	}
 	return
 }
+
 func (rwc *slowWriter) Write(p []byte) (n int, err error) {
 	// Delay anything but writing single-request headers
-	if err == nil && (len(p) < 13 || p[0] != byte(gotalk.MsgTypeSingleReq)) {
+
+	// tname := "?"
+	// switch gotalk.MsgType(p[0]) {
+	// case gotalk.MsgTypeSingleReq: tname = "SingleReq"
+	// case gotalk.MsgTypeStreamReq: tname = "StreamReq"
+	// case gotalk.MsgTypeStreamReqPart: tname = "StreamReqPart"
+	// case gotalk.MsgTypeSingleRes: tname = "SingleRes"
+	// case gotalk.MsgTypeStreamRes: tname = "StreamRes"
+	// case gotalk.MsgTypeErrorRes: tname = "ErrorRes"
+	// case gotalk.MsgTypeRetryRes: tname = "RetryRes"
+	// case gotalk.MsgTypeNotification: tname = "Notification"
+	// case gotalk.MsgTypeHeartbeat: tname = "Heartbeat"
+	// case gotalk.MsgTypeProtocolError: tname = "ProtocolError"
+	// default:
+	// 	fmt.Printf("slowWriter.Write (rest) %q\n", p)
+	// 	return rwc.c.Write(p)
+	// }
+	// fmt.Printf("slowWriter.Write %s\n", tname)
+
+	if err == nil && p[0] == byte(gotalk.MsgTypeSingleReq) {
 		time.Sleep(rwc.delay)
+		n, err = rwc.c.Write(p)
+		return
 	}
 	return rwc.c.Write(p)
 }
+
 func (rwc *slowWriter) Close() error {
 	return rwc.c.Close()
 }
 
-func sendRequest(s *gotalk.Sock) {
+func sendRequest(s *gotalk.Sock) error {
 	fmt.Printf("requestor: sending 'echo' request\n")
 	b, err := s.BufferRequest("echo", []byte("Hello"))
 	if err == gotalk.ErrTimeout {
@@ -43,46 +69,61 @@ func sendRequest(s *gotalk.Sock) {
 	} else if err != nil {
 		fmt.Printf("requestor: error %v\n", err.Error())
 	} else {
-		fmt.Printf("requestor: success: %v\n", string(b))
+		fmt.Printf("requestor: success: %q\n", b)
 	}
+	return err
 }
 
-func timeoutRequest(port string) {
+func sendSlowWritingRequest(port string) error {
 	s, err := gotalk.Connect("tcp", "localhost:"+port)
-	if err != nil {
-		panic(err)
+	if err == nil {
+		fmt.Printf("requestor: connected to %q on Sock@%p\n", s.Addr(), s)
+
+		// Wrap the connection for slow writing to simulate a poor connection
+		s.Adopt(&slowWriter{c: s.Conn(), delay: 200 * time.Millisecond})
+
+		// Send a request -- it will take too long and time out
+		fmt.Printf("requestor: send slow request\n")
+		err = sendRequest(s)
+
+		s.Close()
 	}
-	fmt.Printf("requestor: connected to %q\n", s.Addr())
-
-	// Wrap the connection for slow writing to simulate a poor connection
-	s.Adopt(&slowWriter{s.Conn(), 1000 * time.Millisecond})
-
-	// Send a request -- it will take too long and time out
-	sendRequest(s)
-
-	s.Close()
+	return err
 }
 
-func heartbeatKeepAlive(port string) {
+func sendRegularRequest(port string) error {
 	s, err := gotalk.Connect("tcp", "localhost:"+port)
-	if err != nil {
-		panic(err)
+	if err == nil {
+		fmt.Printf("requestor: connected to %q on Sock@%p\n", s.Addr(), s)
+		err = sendRequest(s)
+		s.Close()
 	}
-	fmt.Printf("requestor: connected to %q\n", s.Addr())
-
-	// set our heartbeat interval to half that time of the responder timeout
-	s.HeartbeatInterval = 500 * time.Millisecond
-
-	// Sleep for 3 seconds
-	time.Sleep(3 * time.Second)
-
-	// Send a request, which will work since we have kept the connection alive with heartbeats
-	sendRequest(s)
-
-	s.Close()
+	return err
 }
 
 func requestor(port string) {
-	timeoutRequest(port)
-	heartbeatKeepAlive(port)
+	var wg sync.WaitGroup
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			err := sendSlowWritingRequest(port)
+			if err == nil {
+				panic(fmt.Sprintf("expected error from sendSlowWritingRequest (no error)"))
+			} else {
+				s := err.Error()
+				if !strings.Contains(s, "timeout") && !strings.Contains(s, "socket closed") {
+					panic(fmt.Sprintf(
+						"expected timeout or socket closed from sendSlowWritingRequest but got %v",
+						err))
+				}
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	// time.Sleep(10 * time.Millisecond)
+	// if err := sendRegularRequest(port); err != nil {
+	// 	panic(fmt.Sprintf("expected sendRegularRequest to succeed but got error %v", err))
+	// }
 }

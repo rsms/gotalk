@@ -38,10 +38,6 @@ func (s *WebSocket) Context() context.Context { return s.ws.Request().Context() 
 
 // WebSocketServer conforms to http.HandlerFunc and is used to serve Gotalk over HTTP or HTTPS
 type WebSocketServer struct {
-	// Limits control resource limits.
-	// Initially set to gotalk.DefaultLimits by NewWebSocketServer().
-	Limits
-
 	// Handlers describe what this server is capable of responding to.
 	// Initially set to gotalk.DefaultHandlers by NewWebSocketServer().
 	//
@@ -49,6 +45,10 @@ type WebSocketServer struct {
 	// Whenever a new socket is connected, it references the current value of Handlers, therefore
 	// changes to Handlers has an effect for newly connected sockets only.
 	*Handlers
+
+	// Limits control resource limits.
+	// Initially set to gotalk.DefaultLimits by NewWebSocketServer().
+	*Limits
 
 	// OnConnect is an optional handler to be invoked when a new socket is connected.
 	// This handler is only called for sockets which passed the protocol handshake.
@@ -89,8 +89,8 @@ type WebSocketServer struct {
 // NewWebSocketServer creates a web socket server which is a http.Handler
 func NewWebSocketServer() *WebSocketServer {
 	s := &WebSocketServer{
-		Limits:   DefaultLimits,
 		Handlers: DefaultHandlers,
+		Limits:   DefaultLimits,
 		server: websocket.Server{
 			Handshake: checkOrigin,
 		},

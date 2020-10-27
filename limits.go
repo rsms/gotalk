@@ -6,154 +6,57 @@ import (
 	"time"
 )
 
-type Limits interface {
-	// Maximum amount of time allowed to read a buffer request. 0 = no timeout.
-	// Defaults to 30 seconds.
-	ReadTimeout() time.Duration
-	SetReadTimeout(time.Duration)
-
-	incBufferReq() bool
-	decBufferReq()
-	streamReqEnabled() bool
-	incStreamReq() bool
-	decStreamReq()
-}
-
-// Create new Limits, limiting request processing.
-//
-// `streamRequestLimit` limits the amount of stream requests but works together with `requestLimit`
-// meaning that we can handle `requestLimit` requests of any type, but no more than
-//
-// `streamRequestLimit` of the streaming kind. Say `streamRequestLimit=5` and `requestLimit=10`,
-// and we are currently processing 5 streaming requests, we can handle an additional 5 buffered
-// requests, but no more streaming requests.
-//
-// - If both `requestLimit` and `streamRequestLimit` is 0, buffer requests are not limited and
-//   stream requests are disabled.
-// - If `streamRequestLimit` is 0, buffer requests are limited to `requestLimit` and stream
-//   requests are disabled.
-// - If `requestLimit` is 0, buffer requests aren't limited, but stream requests are limited
-//   to `streamRequestLimit`.
-//
-func NewLimits(requestLimit uint32, streamRequestLimit uint32) Limits {
-	if requestLimit == 0 && streamRequestLimit == 0 {
-		return &noLimitNoStream{DefaultLimits.ReadTimeout()}
-
-	} else if requestLimit == 0 {
-		return &limitStream{limit{streamRequestLimit, 0}, DefaultLimits.ReadTimeout()}
-
-	} else if streamRequestLimit == 0 {
-		return &limitSingleNoStream{limit{requestLimit, 0}, DefaultLimits.ReadTimeout()}
-
-	} else {
-		if streamRequestLimit > requestLimit {
-			panic("streamRequestLimit > requestLimit")
-		}
-		return &limitSingleAndStream{
-			limit{requestLimit, 0},
-			limit{streamRequestLimit, 0},
-			DefaultLimits.ReadTimeout(),
-		}
-	}
-}
-
 // DefaultLimits does not limit buffer requests, and disables stream requests.
-var DefaultLimits Limits = &noLimitNoStream{30 * time.Second}
+var DefaultLimits = &Limits{
+	ReadTimeout:    30 * time.Second,
+	BufferRequests: Unlimited,
+	StreamRequests: 0, // disallow stream requests
+	BufferMinWait:  500 * time.Millisecond,
+	BufferMaxWait:  5000 * time.Millisecond,
+	StreamMinWait:  500 * time.Millisecond,
+	StreamMaxWait:  5000 * time.Millisecond,
+}
 
-// NoLimits does not limit buffer requests or stream requests, not does it have a read timeout.
-var NoLimits Limits = noLimit(false)
+// NoLimits does not limit buffer requests or stream requests, nor does it have a read timeout.
+var NoLimits = &Limits{
+	BufferRequests: Unlimited,
+	StreamRequests: Unlimited,
+}
+
+// Unlimited can be used with Limits.BufferRequests and Limits.StreamRequests
+const Unlimited = uint32(0xFFFFFFFF)
+
+type Limits struct {
+	ReadTimeout time.Duration // timeout for reading messages from the network (0=no limit)
+
+	BufferRequests uint32 // max number of concurrent buffer requests
+	StreamRequests uint32 // max number of concurrent buffer requests
+
+	BufferMinWait time.Duration // minimum time to wait when BufferRequests has been reached
+	BufferMaxWait time.Duration // max time to wait when BufferRequests has been reached
+
+	StreamMinWait time.Duration // minimum time to wait when StreamRequests has been reached
+	StreamMaxWait time.Duration // max time to wait when StreamRequests has been reached
+}
+
+// Create new Limits based on DefaultLimits
+// It's usually easier to just construct Limits{} manually. This function is here mainly for
+// backwards API compatibility with earlier Gotalk.
+func NewLimits(bufferRequestLimit uint32, streamRequestLimit uint32) *Limits {
+	l := *DefaultLimits
+	l.BufferRequests = bufferRequestLimit
+	l.StreamRequests = streamRequestLimit
+	return &l
+}
 
 // -----------------------------------------------------------------------------------------------
 
-type noLimit bool
-
-func (l noLimit) incBufferReq() bool             { return true }
-func (l noLimit) decBufferReq()                  {}
-func (l noLimit) streamReqEnabled() bool         { return true }
-func (l noLimit) incStreamReq() bool             { return true }
-func (l noLimit) decStreamReq()                  {}
-func (l noLimit) ReadTimeout() time.Duration     { return 0 }
-func (l noLimit) SetReadTimeout(_ time.Duration) {}
-
-// -----------------------------------------------------------------------------------------------
-
-type noLimitNoStream struct {
-	readTimeout time.Duration
-}
-
-func (l *noLimitNoStream) incBufferReq() bool             { return true }
-func (l *noLimitNoStream) decBufferReq()                  {}
-func (l *noLimitNoStream) streamReqEnabled() bool         { return false }
-func (l *noLimitNoStream) incStreamReq() bool             { return false }
-func (l *noLimitNoStream) decStreamReq()                  {}
-func (l *noLimitNoStream) ReadTimeout() time.Duration     { return l.readTimeout }
-func (l *noLimitNoStream) SetReadTimeout(d time.Duration) { l.readTimeout = d }
-
-// -----------------------------------------------------------------------------------------------
-
-type limitStream struct {
-	streamLimit limit
-	readTimeout time.Duration
-}
-
-func (l *limitStream) incBufferReq() bool             { return true }
-func (l *limitStream) decBufferReq()                  {}
-func (l *limitStream) streamReqEnabled() bool         { return true }
-func (l *limitStream) incStreamReq() bool             { return l.streamLimit.inc() }
-func (l *limitStream) decStreamReq()                  { l.streamLimit.dec() }
-func (l *limitStream) ReadTimeout() time.Duration     { return l.readTimeout }
-func (l *limitStream) SetReadTimeout(d time.Duration) { l.readTimeout = d }
-
-// -----------------------------------------------------------------------------------------------
-
-type limitSingleNoStream struct {
-	singleLimit limit
-	readTimeout time.Duration
-}
-
-func (l *limitSingleNoStream) incBufferReq() bool             { return l.singleLimit.inc() }
-func (l *limitSingleNoStream) decBufferReq()                  { l.singleLimit.dec() }
-func (l *limitSingleNoStream) streamReqEnabled() bool         { return false }
-func (l *limitSingleNoStream) incStreamReq() bool             { return false }
-func (l *limitSingleNoStream) decStreamReq()                  {}
-func (l *limitSingleNoStream) ReadTimeout() time.Duration     { return l.readTimeout }
-func (l *limitSingleNoStream) SetReadTimeout(d time.Duration) { l.readTimeout = d }
-
-// -----------------------------------------------------------------------------------------------
-
-type limitSingleAndStream struct {
-	bothLimit   limit
-	streamLimit limit
-	readTimeout time.Duration
-}
-
-func (l *limitSingleAndStream) incBufferReq() bool     { return l.bothLimit.inc() }
-func (l *limitSingleAndStream) decBufferReq()          { l.bothLimit.dec() }
-func (l *limitSingleAndStream) streamReqEnabled() bool { return true }
-func (l *limitSingleAndStream) incStreamReq() bool {
-	if l.bothLimit.inc() {
-		if l.streamLimit.inc() {
-			return true
-		}
-		l.bothLimit.dec()
-	}
-	return false
-}
-func (l *limitSingleAndStream) decStreamReq() {
-	l.streamLimit.dec()
-	l.bothLimit.dec()
-}
-func (l *limitSingleAndStream) ReadTimeout() time.Duration     { return l.readTimeout }
-func (l *limitSingleAndStream) SetReadTimeout(d time.Duration) { l.readTimeout = d }
-
-// -----------------------------------------------------------------------------------------------
-
-type limit struct {
+type limitCounter struct {
 	limit uint32
 	count uint32
 }
 
-func (l *limit) inc() bool {
+func (l *limitCounter) inc() bool {
 	n := atomic.AddUint32(&l.count, 1)
 	if n > l.limit {
 		l.dec()
@@ -162,26 +65,101 @@ func (l *limit) inc() bool {
 	return true
 }
 
-func (l *limit) dec() {
+func (l *limitCounter) dec() {
 	atomic.AddUint32(&l.count, ^uint32(0)) // see godoc sync/atomic/#AddUint32
 }
 
 // -----------------------------------------------------------------------------------------------
 
-func init() {
-	rand.Seed(time.Now().UTC().UnixNano())
+type limitsImpl struct {
+	readTimeout time.Duration // message reading timeout
+	bufferLimit limitCounter
+	streamLimit limitCounter
+
+	bufferMinWait, bufferMaxWait uint32
+	streamMinWait, streamMaxWait uint32
 }
 
-func limitWait(min, max int) uint32 {
-	return uint32(min + rand.Intn(max-min))
+func makeLimitsImpl(limits *Limits) limitsImpl {
+	if limits == nil {
+		limits = DefaultLimits
+	}
+	bufferMinWait, bufferMaxWait := limits.BufferMinWait, limits.BufferMaxWait
+	streamMinWait, streamMaxWait := limits.StreamMinWait, limits.StreamMaxWait
+
+	if bufferMinWait <= 0 {
+		bufferMinWait = DefaultLimits.BufferMinWait
+	}
+	if bufferMaxWait <= 0 {
+		bufferMaxWait = DefaultLimits.BufferMaxWait
+	} else if bufferMaxWait < bufferMinWait {
+		bufferMaxWait = bufferMinWait
+	}
+
+	if streamMinWait <= 0 {
+		streamMinWait = DefaultLimits.StreamMinWait
+	}
+	if streamMaxWait <= 0 {
+		streamMaxWait = DefaultLimits.StreamMaxWait
+	} else if streamMaxWait < streamMinWait {
+		streamMaxWait = streamMinWait
+	}
+
+	return limitsImpl{
+		readTimeout:   limits.ReadTimeout,
+		bufferLimit:   limitCounter{limit: limits.BufferRequests},
+		streamLimit:   limitCounter{limit: limits.StreamRequests},
+		bufferMinWait: uint32(bufferMinWait / time.Millisecond),
+		bufferMaxWait: uint32(bufferMaxWait / time.Millisecond),
+		streamMinWait: uint32(streamMinWait / time.Millisecond),
+		streamMaxWait: uint32(streamMaxWait / time.Millisecond),
+	}
 }
 
-func limitWaitStreamReq() uint32 {
-	// Time to tell requestor to wait when sending a streaming requests while limit has been reached
-	return limitWait(500, 5000)
+func (l *limitsImpl) incBufferReq() bool {
+	if l.bufferLimit.limit == Unlimited {
+		return true
+	}
+	return l.bufferLimit.inc()
 }
 
-func limitWaitBufferReq() uint32 {
+func (l *limitsImpl) decBufferReq() {
+	if l.bufferLimit.limit != Unlimited {
+		l.bufferLimit.dec()
+	}
+}
+
+func (l *limitsImpl) streamReqEnabled() bool {
+	return l.streamLimit.limit > 0
+}
+
+func (l *limitsImpl) incStreamReq() bool {
+	if l.streamLimit.limit == Unlimited {
+		return true
+	}
+	return l.streamLimit.inc()
+}
+
+func (l *limitsImpl) decStreamReq() {
+	if l.streamLimit.limit != Unlimited {
+		l.streamLimit.dec()
+	}
+}
+
+func (l *limitsImpl) waitBufferReq() uint32 {
 	// Time to tell requestor to wait when sending a buffer requests while limit has been reached
-	return limitWait(500, 5000)
+	return randUint32(l.bufferMinWait, l.bufferMaxWait)
+}
+
+func (l *limitsImpl) waitStreamReq() uint32 {
+	// Time to tell requestor to wait when sending a streaming requests while limit has been reached
+	return randUint32(l.streamMinWait, l.streamMaxWait)
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+func randUint32(min, max uint32) uint32 {
+	return min + uint32(rand.Intn(int(max-min)))
 }

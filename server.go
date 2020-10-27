@@ -2,7 +2,6 @@ package gotalk
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -15,10 +14,10 @@ type SockHandler func(*Sock)
 // Accepts socket connections
 type Server struct {
 	// Handlers associated with this server. Accepted sockets inherit the value.
-	Handlers *Handlers
+	*Handlers
 
 	// Limits. Accepted sockets are subject to the same limits.
-	Limits Limits
+	*Limits
 
 	// Function to be invoked just after a new socket connection has been accepted and
 	// protocol handshake has sucessfully completed. At this point the socket is ready
@@ -37,7 +36,7 @@ type Server struct {
 }
 
 // Create a new server already listening on `l`
-func NewServer(h *Handlers, limits Limits, l net.Listener) *Server {
+func NewServer(h *Handlers, limits *Limits, l net.Listener) *Server {
 	return &Server{Handlers: h, Limits: limits, Listener: l}
 }
 
@@ -197,6 +196,5 @@ func wrapListener(l net.Listener) net.Listener {
 		// Wrap TCP listener to enable TCP keep-alive
 		return &tcpKeepAliveListener{tcpl}
 	}
-	fmt.Printf("[wrapListener] other type %T\n", l)
 	return l
 }

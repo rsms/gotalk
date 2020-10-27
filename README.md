@@ -31,7 +31,7 @@ Build them with `go build`:
 $ cd examples/websocket-chat
 $ go build
 $ ./websocket-chat
-Listening on http://0.0.0.0:1235/
+Listening on http://localhost:1235/
 ```
 
 Here's a minimal but complete example program: (`examples/websocket-minimal`)
