@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+// WebSocketConnection is an alias for the websocket connection type, to spare the use
+// from having to import golang.org/x/net/websocket
+type WebSocketConnection = websocket.Conn
+
 // WebSocket is a type of gotalk.Sock used for web socket connections,
 // managed by a WebSocketServer.
 type WebSocket struct {
@@ -20,19 +24,28 @@ type WebSocket struct {
 
 	// A function to be called when the socket closes. See Socket.CloseHandler for details.
 	CloseHandler func(s *WebSocket, code int)
-
-	// could be gotten from s.Sock.Conn().(*websocket.Conn) but this is simpler and a bit faster.
-	ws *websocket.Conn
 }
 
-// Conn returns the underlying web socket connection
-func (s *WebSocket) Conn() *websocket.Conn { return s.ws }
+// Conn returns the underlying web socket connection.
+//
+// Accessing the web socket connection inside a handler function:
+// Handler functions can opt in to receive a pointer to a Sock but not a WebSocket.
+// This makes handlers more portable, testable and the implementation becomes simpler.
+// However, sometimes you might need to access the web socket connection anyhow:
+//
+//   gotalk.Handle("foo", func(s *gotalk.Sock, m FooMessage) error {
+//     ws := s.Conn().(*gotalk.WebSocketConnection)
+//     // do something with ws
+//     return nil
+//   })
+//
+func (s *WebSocket) Conn() *WebSocketConnection { return s.Sock.conn.(*WebSocketConnection) }
 
 // Request returns the http request upgraded to the WebSocket
-func (s *WebSocket) Request() *http.Request { return s.ws.Request() }
+func (s *WebSocket) Request() *http.Request { return s.Conn().Request() }
 
 // Context returns the http request's context. The returned context is never nil.
-func (s *WebSocket) Context() context.Context { return s.ws.Request().Context() }
+func (s *WebSocket) Context() context.Context { return s.Request().Context() }
 
 // ---------------------------------------------------------------------------------
 
@@ -135,7 +148,7 @@ func (s *WebSocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // internal
 
 // onAccept is called for new web socket connections
-func (server *WebSocketServer) onAccept(ws *websocket.Conn) {
+func (server *WebSocketServer) onAccept(ws *WebSocketConnection) {
 	// Set the frame payload type of the web socket
 	ws.PayloadType = websocket.BinaryFrame
 
@@ -145,8 +158,8 @@ func (server *WebSocketServer) onAccept(ws *websocket.Conn) {
 			Handlers:          server.Handlers,
 			HeartbeatInterval: server.HeartbeatInterval,
 			OnHeartbeat:       server.OnHeartbeat,
+			conn:              ws,
 		},
-		ws: ws,
 	}
 	sock.Sock.CloseHandler = func(_ *Sock, code int) {
 		if sock.CloseHandler != nil {
