@@ -842,11 +842,14 @@ func (s *Sock) CloseError(protocolErrorCode int32) error {
 	return err
 }
 
+// IsClosed returns true if Close() has been called.
+// It is safe for multiple goroutines to call this concurrently.
 func (s *Sock) IsClosed() bool {
 	return atomic.LoadUint32(&s.closex) > 0
 }
 
-// Close this socket
+// Close this socket.
+// It is safe for multiple goroutines to call this concurrently.
 func (s *Sock) Close() error {
 	if atomic.AddUint32(&s.closex, 1) != 1 {
 		// another goroutine won the race or already closed
