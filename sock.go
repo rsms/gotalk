@@ -842,6 +842,10 @@ func (s *Sock) CloseError(protocolErrorCode int32) error {
 	return err
 }
 
+func (s *Sock) IsClosed() bool {
+	return atomic.LoadUint32(&s.closex) > 0
+}
+
 // Close this socket
 func (s *Sock) Close() error {
 	if atomic.AddUint32(&s.closex, 1) != 1 {
