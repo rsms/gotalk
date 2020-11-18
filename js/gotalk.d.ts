@@ -108,10 +108,10 @@ interface Sock<T> extends EventEmitter<SockEventMap> {
   openKeepAlive(addr? :string) :this
 
   // Send request for operation `op` with `value` as the payload, using JSON for encoding.
-  request(op :string, value :any, cb :(e :Error, result :any)=>void) :void
+  request<R=any>(op :string, value :any, cb :(e :Error, result :R)=>void) :void
 
   // Promise version of request
-  requestp(op :string, value :any) :Promise<any>
+  requestp<R=any>(op :string, value :any) :Promise<R>
 
   // Send a request for operation `op` with raw-buffer `buf` as the payload,
   // if any. The type of result depends on the protocol used by the server
