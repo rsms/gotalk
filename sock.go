@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"runtime"
 	"sync"
@@ -420,9 +419,10 @@ func (s *Sock) readBufferReq(lim *limitsImpl, id, op string, size int) error {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
+				HandlerErrorLogger(s, "error in request handler: %v (op %q)", r, op)
 				if s.conn != nil {
 					if err := s.respondError(0, id, fmt.Sprint(r)); err != nil {
-						log.Println(err)
+						s.logRespondErr(op, err)
 						s.Close()
 					}
 				}
@@ -431,20 +431,24 @@ func (s *Sock) readBufferReq(lim *limitsImpl, id, op string, size int) error {
 		}()
 		outbuf, err := handler(s, op, inbuf)
 		if err != nil {
-			log.Println(err)
+			HandlerErrorLogger(s, "error in request handler: %v (op %q)", err, op)
 			if err := s.respondError(0, id, err.Error()); err != nil {
-				log.Println(err)
+				s.logRespondErr(op, err)
 				s.Close()
 			}
 		} else {
 			if err := s.respondOK(id, outbuf); err != nil {
-				log.Println(err)
+				s.logRespondErr(op, err)
 				s.Close()
 			}
 		}
 	}()
 
 	return nil
+}
+
+func (s *Sock) logRespondErr(op string, err error) {
+	ErrorLogger(s, "error while sending response: %v (op %q)", err, op)
 }
 
 // -----------------------------------------------------------------------------------------------
@@ -513,7 +517,7 @@ func (s *Sock) readStreamReq(lim *limitsImpl, id, op string, size int) error {
 		if err := handler(s, op, rch, out); err != nil {
 			s.deallocReqChan(id)
 			if err := s.respondError(0, id, err.Error()); err != nil {
-				log.Println(err)
+				s.logRespondErr(op, err)
 				s.Close()
 			}
 		}
@@ -797,6 +801,7 @@ readloop:
 				}
 			} else {
 				// Broken connection (e.g. pipe error, connection reset by peer, etc.)
+				// Don't log this as it happens often and "naturally."
 				err = io.EOF
 				s.Close()
 			}
