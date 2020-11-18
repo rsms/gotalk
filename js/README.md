@@ -10,9 +10,10 @@ gotalk.handle('prompt', function (params, result) {
   result(answer);
 });
 
-gotalk.connection().on('open', function (err, s) {
+let c = gotalk.connection()
+c.on('open', function (err) {
   if (err) return console.error(err);
-  s.request('echo', function(err, result) {
+  c.request('echo', function(err, result) {
     alert('echo returned:', result);
   });
 });
@@ -222,7 +223,7 @@ type Handlers {
   // no handlers registered for request "x", the fallback handler will be invoked.
   handleRequest(op string, ReqValueHandler)
   handleBufferRequest(op string, ReqBufferHandler)
-  
+
   // Register a handler for notification `name`. Just as with request handlers,
   // registering a handler for the empty string means it's registered as the
   // fallback handler.
