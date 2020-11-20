@@ -22,6 +22,8 @@ type Handlers struct {
 	notesMu             sync.RWMutex
 	noteHandlers        noteHandlerMap
 	noteFallbackHandler BufferNoteHandler
+
+	outer *Handlers // if non-nil, this is searched when a local lookup fails
 }
 
 // NewHandlers creates a new Handlers struct.
@@ -98,6 +100,14 @@ func HandleBufferNotification(name string, fn BufferNoteHandler) {
 type bufReqHandlerMap map[string]BufferReqHandler
 type streamReqHandlerMap map[string]StreamReqHandler
 type noteHandlerMap map[string]BufferNoteHandler
+
+// NewSubHandlers returns a new Handlers object which wraps the receiver.
+// It can be used to override or extend h, without modifying h.
+// For example, it could be used to expose an extra set of operations to certain sockets,
+// like signed-in users.
+func (h *Handlers) NewSubHandlers() *Handlers {
+	return &Handlers{ outer: h }
+}
 
 // Handle operation with automatic JSON encoding of values.
 //
@@ -185,6 +195,9 @@ func (h *Handlers) FindBufferRequestHandler(op string) BufferReqHandler {
 	if handler := h.bufReqHandlers[op]; handler != nil {
 		return handler
 	}
+	if h.outer != nil {
+		return h.outer.FindBufferRequestHandler(op)
+	}
 	return h.bufReqFallbackHandler
 }
 
@@ -195,6 +208,9 @@ func (h *Handlers) FindStreamRequestHandler(op string) StreamReqHandler {
 	if handler := h.streamReqHandlers[op]; handler != nil {
 		return handler
 	}
+	if h.outer != nil {
+		return h.outer.FindStreamRequestHandler(op)
+	}
 	return h.streamReqFallbackHandler
 }
 
@@ -204,6 +220,9 @@ func (h *Handlers) FindNotificationHandler(name string) BufferNoteHandler {
 	defer h.notesMu.RUnlock()
 	if handler := h.noteHandlers[name]; handler != nil {
 		return handler
+	}
+	if h.outer != nil {
+		return h.outer.FindNotificationHandler(name)
 	}
 	return h.noteFallbackHandler
 }
