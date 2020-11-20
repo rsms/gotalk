@@ -106,7 +106,7 @@ type noteHandlerMap map[string]BufferNoteHandler
 // For example, it could be used to expose an extra set of operations to certain sockets,
 // like signed-in users.
 func (h *Handlers) NewSubHandlers() *Handlers {
-	return &Handlers{ outer: h }
+	return &Handlers{outer: h}
 }
 
 // Handle operation with automatic JSON encoding of values.
