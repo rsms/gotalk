@@ -111,17 +111,22 @@ function Sock(handlers, proto) { return Object.create(Sock.prototype, {
   heartbeatInterval: {value: 20 * 1000, enumerable:true, writable:true},
 
   // Internal
-  ws:            {value:null, writable:true},
-  keepalive:     {value:null, writable:true},
+  ws:            {value:null,  writable:true, enumerable:true},
+  keepalive:     {value:null,  writable:true, enumerable:true},
+  _isOpen:       {value:false, writable:true},
+
+  // Send queue
+  _sendq:           {value:[],  writable:true},
+  sendBufferLimit:  {value:100, writable:true, enumerable:true},
 
   // Used for performing requests
-  nextOpID:      {value:0, writable:true},
-  nextStreamID:  {value:0, writable:true},
+  nextOpID:      {value:0,  writable:true},
+  nextStreamID:  {value:0,  writable:true},
   pendingRes:    {value:{}, writable:true},
   hasPendingRes: {get:function(){ for (var k in this.pendingRes) { return true; } }},
 
   // True if end() has been called while there were outstanding responses
-  pendingClose:  {value:false, writable:true}
+  pendingClose:  {value:false, writable:true},
 }); }
 
 Sock.prototype = EventEmitter.mixin(Sock.prototype);
@@ -187,6 +192,7 @@ Sock.prototype.adoptWebSocket = function(ws) {
       err = new Error('websocket closed: ' + wsCloseStatusMsg(ev.code));
     }
     resetSock(s, err);
+    s._connectionStatusChange(false);
     s.emit('close', err);
   };
   ws.onmessage = function(ev) {
@@ -436,25 +442,76 @@ msgHandlers[protocol.MsgTypeHeartbeat] = function (msg) {
 // ===============================================================================================
 // Sending messages
 
+Sock.prototype._connectionStatusChange = function(isOpen) {
+  if (this._isOpen == isOpen) {
+    return
+  }
+  this._isOpen = isOpen;
+  if (isOpen) {
+    flushSendq(this)
+  }
+}
+
+function sendMsg(s, buf1, buf2) {
+  try {
+    s.ws.send(buf1);
+    if (buf2) {
+      s.ws.send(buf2);
+    }
+  } catch (err) {
+    if (!s.ws || s.ws.readyState > WebSocket.OPEN) {
+      err = new Error('socket is closed');
+      if (sendEnqueue(s, buf1, buf2)) {
+        console.warn("gotalk send error: " + err + " (retrying)")
+        return
+      }
+    }
+    throw err
+  }
+}
+
+function flushSendq(s) {
+  if (s._sendq.length == 0) {
+    return
+  }
+  var q = s._sendq
+  s._sendq = []
+  var err, t, i = 0
+  for (; i < q.length; i++) {
+    t = q[i]
+    sendMsg(s, t[0], t[1])
+  }
+}
+
+function sendEnqueue(s, buf1, buf2) {
+  if (s._sendq.length >= s.sendBufferLimit) {
+    return false
+  }
+  s._sendq.push([buf1, buf2])
+  return true
+}
 
 Sock.prototype.sendMsg = function(t, id, name, wait, payload) {
-  var payloadSize = (payload && typeof payload === 'string' && this.protocol === protocol.binary) ?
-    utf8.sizeOf(payload) :
-    payload ? payload.length || payload.size :
-    0;
+  var payloadSize = 0
+  if (payload) {
+    if (typeof payload === 'string' && this.protocol === protocol.binary) {
+      payloadSize = utf8.sizeOf(payload)
+    } else {
+      payloadSize = payload.length || payload.size || 0
+    }
+    if (payloadSize == 0) {
+      payload = null
+    }
+  }
   var s = this, buf = s.protocol.makeMsg(t, id, name, wait, payloadSize);
   // console.log('sendMsg(',t,id,name,payload,'): protocol.makeMsg =>',
   //   typeof buf === 'string' ? buf : buf.toString());
-  try {
-    s.ws.send(buf);
-    if (payloadSize !== 0) {
-      s.ws.send(payload);
+  if (!s._isOpen) {
+    if (!sendEnqueue(s, buf, payload)) {
+      throw new Error('socket is closed');
     }
-  } catch (err) {
-    if (!this.ws || this.ws.readyState > WebSocket.OPEN) {
-      err = new Error('socket is closed');
-    }
-    throw err;
+  } else {
+    sendMsg(s, buf, payload)
   }
 };
 
@@ -469,67 +526,64 @@ Sock.prototype.closeError = function(code) {
   }
 };
 
-var zeroes = '0000';
-
-// callback function(Error, outbuf)
-Sock.prototype.bufferRequest = function(op, buf, callback) {
-  var s = this, id = s.nextOpID++;
-  if (s.nextOpID === 1679616) {
-    // limit for base36 within 4 digits (36^4=1679616)
-    s.nextOpID = 0;
-  }
-  id = id.toString(36);
-  id = zeroes.substr(0, 4 - id.length) + id;
-
-  s.pendingRes[id] = callback;
-  try {
-    s.sendMsg(protocol.MsgTypeSingleReq, id, op, 0, buf);
-  } catch (err) {
-    delete s.pendingRes[id];
-    callback(err);
-  }
-}
-
-
-Sock.prototype.bufferNotify = function(name, buf) {
-  this.sendMsg(protocol.MsgTypeNotification, null, name, 0, buf);
-}
-
-
-Sock.prototype.request = function(op, value, callback) {
-  var buf;
-  if (!callback) {
-    // no value
-    callback = value;
-  } else {
-    buf = JSON.stringify(value);
-  }
-  return this.bufferRequest(op, buf, function (err, buf) {
-    var value = decodeJSON(buf);
-    return callback(err, value);
-  });
-}
-
-
 Sock.prototype.notify = function(op, value) {
   var buf = JSON.stringify(value);
   return this.bufferNotify(op, buf);
 }
 
+Sock.prototype.bufferNotify = function(name, buf) {
+  this.sendMsg(protocol.MsgTypeNotification, null, name, 0, buf);
+}
 
-Sock.prototype.requestp = function(op, value) {
+var zeroes = '0000';
+
+Sock.prototype.bufferRequest = function(op, buf, callback) {
   var s = this
   return new Promise(function (resolve, reject) {
-    s.request(op, value, function(err, res) { err ? reject(err) : resolve(res) })
+    var id = s.nextOpID++;
+    if (s.nextOpID === 1679616) {
+      // limit for base36 within 4 digits (36^4=1679616)
+      s.nextOpID = 0;
+    }
+    id = id.toString(36);
+    id = zeroes.substr(0, 4 - id.length) + id;
+    var finalizer = function(err, resp) {
+      if (err) { reject(err) } else { resolve(resp) }
+      if (callback) { callback(err, resp) }
+    }
+    s.pendingRes[id] = finalizer
+    try {
+      s.sendMsg(protocol.MsgTypeSingleReq, id, op, 0, buf);
+    } catch (err) {
+      delete s.pendingRes[id];
+      finalizer(err);
+    }
   })
 }
 
-Sock.prototype.bufferRequestp = function(op, buf) {
-  var s = this
-  return new Promise(function (resolve, reject) {
-    s.bufferRequest(op, buf, function(err, res) { err ? reject(err) : resolve(res) })
+Sock.prototype.request = function(op, value, callback) {
+  var buf;
+  if (value !== undefined) {
+    if (callback === undefined && typeof value == "function") {
+      // called as: request("op", function...)
+      callback = value;
+    } else {
+      buf = JSON.stringify(value);
+    }
+  }
+  var p = this.bufferRequest(op, buf).then(function (buf) {
+    var value = decodeJSON(buf);
+    if (callback) { callback(null, value) }
+    return value
   })
+  if (callback) {
+    p = p.catch(function (err) { callback(err) })
+  }
+  return p
 }
+
+Sock.prototype.requestp = Sock.prototype.request
+Sock.prototype.bufferRequestp = Sock.prototype.bufferRequest
 
 
 // ===============================================================================================
@@ -676,8 +730,9 @@ function openWebSocket(s, addr, callback) {
       ws.onerror = undefined;
       s.adoptWebSocket(ws);
       s.handshake();
+      s._connectionStatusChange(true);
       if (callback) callback(null, s);
-      s.emit('open');
+      s.emit('open', s);
       s.startReading();
     };
     ws.onmessage = function(ev) {
@@ -686,6 +741,7 @@ function openWebSocket(s, addr, callback) {
     };
   } catch (err) {
     logDevWarning("[gotalk] WebSocket init error:", err.stack || (""+err))
+    s._connectionStatusChange(false);
     if (callback) callback(err);
     s.emit('close', err);
   }

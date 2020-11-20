@@ -83,14 +83,14 @@ function handleBufferNotification<T=Uint8Array>(
 ) :void
 
 
-interface SockEventMap {
-  "open"      :undefined  // connection has opened.
-  "close"     :Error|null // connection has closed. Arg is non-null if closed because of error.
+interface SockEventMap<T> {
+  "open"      :Sock<T>    // connection is open
+  "close"     :Error|null // connection is closed. Arg is non-null if closed because of error.
   "heartbeat" :{time: Date, load: number}
 }
 
 
-interface Sock<T> extends EventEmitter<SockEventMap> {
+interface Sock<T> extends EventEmitter<SockEventMap<T>> {
   readonly ws       :WebSocket    // underlying connection
   readonly handlers :Handlers<T>
   readonly protocol :Protocol<T>
@@ -108,19 +108,15 @@ interface Sock<T> extends EventEmitter<SockEventMap> {
   openKeepAlive(addr? :string) :this
 
   // Send request for operation `op` with `value` as the payload, using JSON for encoding.
-  request<R=any>(op :string, value :any, cb :(e :Error, result :R)=>void) :void
-
-  // Promise version of request
-  requestp<R=any>(op :string, value :any) :Promise<R>
+  // The cb argument is optional and here for backwards compatibility with an older API.
+  request<R=any>(op :string, value :any, cb? :(e :Error, result :R)=>void) :Promise<R>
 
   // Send a request for operation `op` with raw-buffer `buf` as the payload,
   // if any. The type of result depends on the protocol used by the server
   // — a server sending a "text" frame means the result is a string, while a
   // server sending a "binary" frame causes the result to be a Uint8Array.
-  bufferRequest(op :string, buf :T|null, cb :(e :Error, result :T)=>void) :void
-
-  // Promise version of bufferRequest
-  bufferRequestp(op :string, buf :T|null) :Promise<T>
+  // The cb argument is optional and here for backwards compatibility with an older API.
+  bufferRequest(op :string, buf :T|null, cb? :(e :Error, result :T)=>void) :Promise<T>
 
   // Create a StreamRequest for operation `op` which is ready to be used.
   // Note that calling this method does not send any data — sending the request
@@ -135,7 +131,6 @@ interface Sock<T> extends EventEmitter<SockEventMap> {
 
   // Send a heartbeat message with `load` which should be in the range [0-1]
   sendHeartbeat(load :number) :void
-
 
   // Returns a string representing the address to which the socket is connected.
   address() :string|null
@@ -160,6 +155,17 @@ interface Sock<T> extends EventEmitter<SockEventMap> {
   // If you call this function a second time, the socket will close immediately,
   // even if there are outstanding responses.
   end() :void
+
+  // sendBufferLimit configures how many messages may be queued to be sent when
+  // the socket is not connected.
+  // A value of 0 causes send buffering to be disabled.
+  // Added in gotalk.js v1.2.0
+  sendBufferLimit :number
+
+  /** @DEPRECATED use request */
+  requestp<R=any>(op :string, value :any) :Promise<R>
+  /** @DEPRECATED use bufferRequest */
+  bufferRequestp(op :string, buf :T|null) :Promise<T>
 }
 
 
