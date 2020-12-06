@@ -1,8 +1,11 @@
 // Stay connected by automatically reconnecting w/ exponential back-off.
 import { document, global } from "./env"
 import { ErrorTimeout } from "./protocol"
+import { EventEmitter } from "./EventEmitter"
 
-var netAccess = {available:false, onLine:true}
+var netAccess = new EventEmitter()
+netAccess.available = false
+netAccess.onLine = true
 
 if (global.addEventListener) {
   netAccess.available = true
@@ -10,7 +13,7 @@ if (global.addEventListener) {
 
   global.addEventListener("offline", function (ev) {
     netAccess.onLine = false
-    netAccess.emit('offline')
+    // netAccess.emit('offline') // unused
   })
 
   global.addEventListener("online", function (ev) {
