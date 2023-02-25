@@ -1,3 +1,3 @@
-# golang.org/x/net v0.0.0-20200930145003-4acb6c075d10
+# golang.org/x/net v0.7.0
 ## explicit
 golang.org/x/net/websocket
