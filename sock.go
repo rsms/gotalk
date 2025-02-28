@@ -617,7 +617,7 @@ func (s *Sock) Handshake() error {
 var (
 	ErrAbnormal    = errors.New("abnormal condition")
 	ErrUnsupported = errors.New("unsupported protocol")
-	ErrInvalidMsg  = errors.New("invalid protocol message")
+	ErrInvalid  = errors.New("invalid protocol message")
 	ErrTimeout     = errors.New("timeout")
 )
 
